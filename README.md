@@ -42,26 +42,16 @@ Dekt o.a.:
 - **`test/engine.test.js`** — volledig spelverloop, host-flow, disconnect →
   slechtste uitkomst, en de tiebreak.
 
-## Deploy op Render (one-click via Blueprint)
+## Online zetten
 
-De repo bevat een [`render.yaml`](render.yaml). Stappen:
+👉 **Volledige stap-voor-stap-gids: [DEPLOY.md](DEPLOY.md)** (Render én Railway,
+in gewone taal uitgelegd).
 
-1. Push deze repo naar GitHub.
-2. Ga naar [Render](https://render.com) → **New +** → **Blueprint**.
-3. Kies deze repo. Render leest `render.yaml` en zet automatisch een web-service
-   op (`npm install` + `npm start`, regio Frankfurt, gratis plan).
-4. Klik **Apply**. Na ~1–2 min krijg je een publieke URL (`https://…onrender.com`)
-   die je met iedereen kunt delen.
-
-De server serveert zowel de WebSockets als de statische frontend op één poort
+Kort samengevat: de repo bevat een [`render.yaml`](render.yaml), dus op
+[Render](https://render.com) is het **New + → Blueprint → repo kiezen → Apply**.
+Na ~1–2 min krijg je een publieke `…onrender.com`-link om met iedereen te delen.
+De server serveert de WebSockets én de frontend op één poort
 (`process.env.PORT`), dus er is verder niets te configureren.
-
-### Alternatief: Railway
-
-1. [Railway](https://railway.app) → **New Project** → **Deploy from GitHub repo**.
-2. Railway detecteert Node automatisch en draait `npm start`. Zorg dat de service
-   luistert op `process.env.PORT` (dat doet hij al).
-3. Voeg via **Settings → Networking → Generate Domain** een publieke URL toe.
 
 ## Architectuur
 

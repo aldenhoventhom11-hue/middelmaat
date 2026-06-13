@@ -23,11 +23,46 @@ body {
   height: 100%;
   font-family: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
   color: var(--ink);
-  background: linear-gradient(160deg, var(--bg1), var(--bg2));
+  background: linear-gradient(180deg, #4cc9f0 0%, #8a7bf0 42%, #c264e0 72%, #f06595 100%);
   background-attachment: fixed;
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Geanimeerde achtergrond: zwevende bollen (bokeh) + zon-gloed. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 50% 50%, rgba(255, 210, 63, 0.5), rgba(255, 210, 63, 0) 65%);
+  background-repeat: no-repeat;
+  background-size: 120px 120px, 180px 180px, 90px 90px, 260px 260px;
+  background-position: 12% 18%, 82% 30%, 70% 78%, 88% 8%;
+  animation: floaty 16s ease-in-out infinite alternate;
+}
+/* Glooiende groene heuvels onderaan. */
+body::after {
+  content: "";
+  position: fixed;
+  left: -5%;
+  right: -5%;
+  bottom: -40px;
+  height: 220px;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(120% 100% at 50% 100%, #8ac926 0%, #6aab1e 55%, transparent 56%);
+  opacity: 0.85;
+}
+@keyframes floaty {
+  to {
+    background-position: 16% 24%, 78% 24%, 74% 70%, 84% 12%;
+  }
 }
 
 #app {
@@ -202,8 +237,8 @@ h2 {
   display: block;
 }
 .creator-preview #char-preview svg {
-  width: 150px;
-  height: 170px;
+  width: auto;
+  height: 210px;
   filter: drop-shadow(0 8px 0 rgba(0, 0, 0, 0.18));
   animation: bob 2s ease-in-out infinite;
 }
@@ -304,8 +339,8 @@ h2 {
   animation: pop 0.3s ease;
 }
 .player-card .char-svg svg {
-  width: 64px;
-  height: 74px;
+  width: auto;
+  height: 86px;
 }
 .player-card .pname {
   font-weight: 800;
@@ -528,8 +563,8 @@ h2 {
   margin: 6px 0;
 }
 .alloc-row .char-svg svg {
-  width: 38px;
-  height: 44px;
+  width: auto;
+  height: 48px;
 }
 .alloc-row .an {
   flex: 1;
@@ -581,8 +616,8 @@ h2 {
   animation: slidein 0.3s ease both;
 }
 .result-row .char-svg svg {
-  width: 44px;
-  height: 50px;
+  width: auto;
+  height: 54px;
 }
 .result-row .rn {
   flex: 1;
@@ -633,8 +668,8 @@ h2 {
   max-width: 130px;
 }
 .podium-spot .char-svg svg {
-  width: 70px;
-  height: 80px;
+  width: auto;
+  height: 92px;
 }
 .podium-spot .stand {
   background: rgba(255, 255, 255, 0.95);
@@ -669,9 +704,9 @@ h2 {
   font-weight: 900;
 }
 .podium-spot.winner .char-svg svg {
-  animation: bob 1.2s ease-in-out infinite;
-  width: 86px;
-  height: 96px;
+  animation: jump 0.7s ease-in-out infinite;
+  width: auto;
+  height: 120px;
 }
 .podium-rest {
   display: flex;
@@ -742,4 +777,242 @@ h2 {
   to {
     transform: translateY(110vh) rotate(540deg);
   }
+}
+
+/* ============ Animaties ============ */
+@keyframes jump {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(2deg);
+  }
+}
+@keyframes spinwheel {
+  to {
+    transform: rotate(var(--spin-to));
+  }
+}
+@keyframes sparkle {
+  0% {
+    transform: scale(0) rotate(0);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.2) rotate(40deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.6) rotate(120deg);
+    opacity: 0;
+  }
+}
+@keyframes popbig {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ============ Het rad ============ */
+.wheel-stage {
+  text-align: center;
+  padding-top: 6px;
+}
+.wheel-wrap {
+  position: relative;
+  width: min(86vw, 340px);
+  height: min(86vw, 340px);
+  margin: 14px auto;
+}
+.wheel-pointer {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36px;
+  z-index: 4;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4));
+}
+.wheel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 8px solid #fff;
+  box-shadow: 0 10px 0 rgba(0, 0, 0, 0.18), inset 0 0 0 4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  transform: rotate(0deg);
+}
+.wheel.spinning {
+  animation: spinwheel 4.2s cubic-bezier(0.13, 0.78, 0.15, 1) forwards;
+}
+.wheel-seg {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 50%;
+  height: 50%;
+  transform-origin: 0% 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 14px;
+  font-size: 26px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+.wheel-seg span {
+  transform: rotate(var(--label-rot));
+  display: block;
+}
+.wheel-hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 5px solid #fff;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+}
+.wheel-result {
+  color: #fff;
+  font-weight: 900;
+  font-size: 24px;
+  min-height: 30px;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+  animation: popbig 0.4s ease both;
+}
+
+/* ============ Ronde-winnaar viering ============ */
+.winner-spotlight {
+  position: relative;
+  background: radial-gradient(120% 120% at 50% 20%, rgba(255, 210, 63, 0.35), rgba(255, 255, 255, 0.95));
+  border-radius: var(--radius);
+  padding: 14px 14px 18px;
+  text-align: center;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  animation: popbig 0.45s ease both;
+}
+.winner-spotlight .char-svg svg {
+  width: auto;
+  height: 150px;
+  animation: jump 0.7s ease-in-out infinite;
+}
+.winner-spotlight .wbanner {
+  font-weight: 900;
+  font-size: 22px;
+  color: var(--bg2);
+}
+.winner-spotlight .wname {
+  font-weight: 800;
+  font-size: 18px;
+}
+.spark {
+  position: absolute;
+  font-size: 22px;
+  animation: sparkle 1.1s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ============ Minigame-scenes ============ */
+.scene {
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+}
+.scene-track {
+  background: repeating-linear-gradient(90deg, #c79a5b 0 46px, #b9883f 46px 48px),
+    linear-gradient(#d8b074, #c79a5b);
+  border: 4px solid #8a5a2b;
+  border-radius: 18px;
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+}
+.scene-track .grass {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 26px;
+  background: linear-gradient(#8ac926, #6aab1e);
+}
+.runner-fig {
+  position: absolute;
+  bottom: 10px;
+  transition: left 0.15s linear;
+}
+.runner-fig svg {
+  height: 90px;
+  width: auto;
+}
+.scene-kitchen {
+  background: linear-gradient(#fdf3d8 0 62%, #c9a36a 62% 100%);
+  border-radius: 18px;
+  height: 150px;
+  position: relative;
+  border: 4px solid #b07d3a;
+  overflow: hidden;
+}
+.scene-pizza {
+  display: block;
+  margin: 0 auto;
+}
+.scene-dark {
+  background: radial-gradient(120% 100% at 50% 120%, #1b1140 0%, #05030f 70%);
+}
+.buzzer {
+  border: none;
+  border-radius: 18px 18px 26px 26px;
+  padding: 18px 18px 26px;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+.buzzer .dome {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  margin: 0 auto 10px;
+  background: radial-gradient(circle at 35% 30%, #ff8a8a, #c0392b);
+  box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.25), 0 4px 0 rgba(0, 0, 0, 0.3);
+}
+.buzzer .lcd {
+  background: #111;
+  color: #ffd23f;
+  font-family: "Courier New", monospace;
+  font-weight: 900;
+  font-size: 30px;
+  border-radius: 8px;
+  padding: 6px 10px;
+  letter-spacing: 2px;
+  display: inline-block;
+}
+.balloon {
+  display: block;
+  margin: 0 auto;
+  transform-origin: 50% 100%;
+  transition: transform 0.3s ease;
+}
+.podium-spot .crown {
+  font-size: 34px;
+  line-height: 1;
+  animation: jump 0.7s ease-in-out infinite;
 }

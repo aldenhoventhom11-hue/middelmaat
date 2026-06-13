@@ -36,23 +36,25 @@ function sanitizeName(name) {
   return s.length ? s : 'Speler';
 }
 
-const SHAPES = ['blob', 'rond', 'vierkant', 'bonk'];
-const EYES = ['gewoon', 'blij', 'boos', 'verbaasd', 'knipoog'];
-const MOUTHS = ['lach', 'grijns', 'streep', 'open', 'tong'];
-const HATS = ['geen', 'pet', 'kroon', 'hoorns', 'bloem', 'tovenaar'];
+const HAIR_STYLES = ['kort', 'krullen', 'lang', 'staart', 'stekels', 'bob', 'kaal'];
+const BUILDS = ['dun', 'gemiddeld', 'stevig'];
+const HEIGHTS = ['klein', 'gemiddeld', 'lang'];
+const FACES = ['blij', 'neutraal', 'stoer', 'verbaasd'];
 
 function sanitizeCharacter(c) {
   c = c && typeof c === 'object' ? c : {};
   const pick = (val, list, def) => (list.includes(val) ? val : def);
-  let color = typeof c.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(c.color)
-    ? c.color
-    : '#ff6b6b';
+  const color = (val, def) =>
+    typeof val === 'string' && /^#[0-9a-fA-F]{6}$/.test(val) ? val : def;
   return {
-    shape: pick(c.shape, SHAPES, 'blob'),
-    color,
-    eyes: pick(c.eyes, EYES, 'gewoon'),
-    mouth: pick(c.mouth, MOUTHS, 'lach'),
-    hat: pick(c.hat, HATS, 'geen'),
+    skin: color(c.skin, '#f3c89b'),
+    hair: pick(c.hair, HAIR_STYLES, 'kort'),
+    hairColor: color(c.hairColor, '#5a3210'),
+    build: pick(c.build, BUILDS, 'gemiddeld'),
+    height: pick(c.height, HEIGHTS, 'gemiddeld'),
+    top: color(c.top, '#5b8cff'),
+    bottom: color(c.bottom, '#2b2d42'),
+    face: pick(c.face, FACES, 'blij'),
   };
 }
 

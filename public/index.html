@@ -79,15 +79,26 @@
         <div id="lobby-controls" class="sticky-actions"></div>
       </section>
 
-      <!-- RONDE-INTRO -->
+      <!-- RONDE-INTRO (rad + uitleg) -->
       <section id="screen-intro" class="screen">
-        <div class="intro-card">
-          <span id="intro-round" class="pill"></span>
-          <h2 id="intro-title"></h2>
-          <p id="intro-theme" class="intro-theme"></p>
-          <div class="intro-rules"><p id="intro-rules"></p></div>
+        <div id="intro-wheel" class="wheel-stage hidden">
+          <h2>🎡 Welke minigame?</h2>
+          <div class="wheel-wrap">
+            <div class="wheel-pointer">🔻</div>
+            <div id="wheel-disc" class="wheel"></div>
+            <div class="wheel-hub">🎲</div>
+          </div>
+          <div id="wheel-result" class="wheel-result"></div>
         </div>
-        <div id="intro-controls" class="sticky-actions"></div>
+        <div id="intro-main">
+          <div class="intro-card">
+            <span id="intro-round" class="pill"></span>
+            <h2 id="intro-title"></h2>
+            <p id="intro-theme" class="intro-theme"></p>
+            <div class="intro-rules"><p id="intro-rules"></p></div>
+          </div>
+          <div id="intro-controls" class="sticky-actions"></div>
+        </div>
       </section>
 
       <!-- SPELEN -->

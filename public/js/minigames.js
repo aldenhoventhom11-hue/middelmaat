@@ -41,6 +41,15 @@
     return h('div', 'submitted-tag', text || '✅ Ingeleverd! Wachten op de rest…');
   }
 
+  // Eigen personage-spec uit de context halen.
+  function myChar(ctx) {
+    const p = (ctx.players || []).find((pp) => pp.id === ctx.me);
+    return p ? p.character : {};
+  }
+  function charEl(spec, pose, cls) {
+    return window.Char.el(spec, cls || '', { pose: pose || 'stand' });
+  }
+
   // =========================================================
   // Gedeelde basis voor "geheim getal kiezen" (ballon, pizza, gemiddeld)
   // =========================================================
@@ -65,6 +74,15 @@
       },
       _build() {
         clear(st.body);
+        st.visBox = h('div');
+        st.visBox.style.cssText = 'min-height:90px;display:flex;align-items:flex-end;justify-content:center;';
+        st.body.appendChild(st.visBox);
+        const refreshVis = () => {
+          if (!cfg.visual) return;
+          st.visBox.innerHTML = '';
+          st.visBox.appendChild(cfg.visual(st.value, cfg));
+        };
+        refreshVis();
         const stepper = h('div', 'stepper');
         const minus = h('button', null, '−');
         const val = h('div', 'value', String(st.value));
@@ -74,11 +92,13 @@
         minus.onclick = () => {
           st.value = Math.max(min, st.value - 1);
           val.textContent = st.value;
+          refreshVis();
           Sound.play('button');
         };
         plus.onclick = () => {
           st.value = Math.min(max, st.value + 1);
           val.textContent = st.value;
+          refreshVis();
           Sound.play('button');
         };
         stepper.appendChild(minus);
@@ -113,6 +133,20 @@
     };
   }
 
+  // Groeiende ballon-SVG.
+  function balloonSvg(value, max, color) {
+    const t = value / max;
+    const r = 16 + t * 30;
+    const cy = 60 - r * 0.1;
+    return (
+      `<svg width="120" height="120" viewBox="0 0 120 120">` +
+      `<line x1="60" y1="${cy + r}" x2="60" y2="112" stroke="#888" stroke-width="1.5"/>` +
+      `<ellipse cx="60" cy="${cy}" rx="${r * 0.9}" ry="${r}" fill="${color}"/>` +
+      `<ellipse cx="${60 - r * 0.3}" cy="${cy - r * 0.3}" rx="${r * 0.22}" ry="${r * 0.32}" fill="rgba(255,255,255,0.5)"/>` +
+      `<path d="M56 ${cy + r} l4 5 4 -5 Z" fill="${color}"/>` +
+      `</svg>`
+    );
+  }
   MG.ballon = numberGame({
     title: 'De Ballon',
     emoji: '🎈',
@@ -120,7 +154,35 @@
     min: 1,
     max: 20,
     start: 10,
+    visual(value, cfg) {
+      const d = document.createElement('div');
+      d.innerHTML = balloonSvg(value, cfg.max, '#ff5d5d');
+      return d;
+    },
   });
+  // Pizza-SVG met geclaimde punten gemarkeerd.
+  function pizzaSvg(value, max) {
+    const cx = 50,
+      cy = 50,
+      r = 42;
+    let s = `<svg width="110" height="110" viewBox="0 0 100 100"><circle cx="${cx}" cy="${cy}" r="${r}" fill="#f0b429" stroke="#b9882f" stroke-width="3"/>`;
+    for (let i = 0; i < max; i++) {
+      const a0 = (i / max) * Math.PI * 2 - Math.PI / 2;
+      const a1 = ((i + 1) / max) * Math.PI * 2 - Math.PI / 2;
+      const x0 = cx + r * Math.cos(a0),
+        y0 = cy + r * Math.sin(a0);
+      const x1 = cx + r * Math.cos(a1),
+        y1 = cy + r * Math.sin(a1);
+      const fill = i < value ? '#e8590c' : 'transparent';
+      s += `<path d="M${cx} ${cy} L${x0} ${y0} A${r} ${r} 0 0 1 ${x1} ${y1} Z" fill="${fill}" fill-opacity="0.6" stroke="#b9882f" stroke-width="1"/>`;
+    }
+    // pepperoni
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      s += `<circle cx="${cx + 22 * Math.cos(a)}" cy="${cy + 22 * Math.sin(a)}" r="4" fill="#c0392b"/>`;
+    }
+    return s + '</svg>';
+  }
   MG.pizzapunt = numberGame({
     title: 'De Pizzapunt',
     emoji: '🍕',
@@ -128,6 +190,11 @@
     min: 0,
     max: 12,
     start: 6,
+    visual(value, cfg) {
+      const d = document.createElement('div');
+      d.innerHTML = pizzaSvg(value, cfg.max);
+      return d;
+    },
   });
   MG.gemiddeldgetal = numberGame({
     title: 'Het Gemiddelde Getal',
@@ -137,6 +204,16 @@
     min: 0,
     max: 100,
     start: 50,
+    visual(value) {
+      const d = document.createElement('div');
+      d.style.cssText = 'width:100%;';
+      d.innerHTML =
+        '<div style="position:relative;height:36px;background:#fff;border-radius:12px;overflow:hidden;">' +
+        '<div style="position:absolute;top:0;bottom:0;left:0;width:' + value + '%;background:linear-gradient(90deg,#4ecdc4,#5b8cff);"></div>' +
+        '<div style="position:absolute;top:50%;left:' + value + '%;transform:translate(-50%,-50%);font-weight:900;color:#1f1147;">' + value + '</div>' +
+        '</div>';
+      return d;
+    },
   });
 
   // =========================================================
@@ -245,36 +322,47 @@
         st.state = null;
         st.local = 0;
         clear(root);
-        st.wrap = root;
-        st.wrap.appendChild(h('div', 'mg-title', '👆 De Tikkampioen'));
+        root.appendChild(h('div', 'mg-title', '👆 De Tikkampioen'));
         st.info = h('div', 'mg-instruct', 'Tik 5 seconden — niet te veel, niet te weinig!');
-        st.wrap.appendChild(st.info);
+        root.appendChild(st.info);
         st.timer = makeTimerBar(() => st.state, 5000);
-        st.wrap.appendChild(st.timer);
-        st.counter = h('div', 'tap-counter', '0');
-        st.wrap.appendChild(st.counter);
-        st.btn = h('button', 'big-button blue', 'TIK!');
-        st.btn.disabled = true;
-        st.btn.addEventListener('pointerdown', (e) => {
+        root.appendChild(st.timer);
+
+        // Arcade-buzzer met LCD-teller.
+        const buzzer = h('div', 'buzzer');
+        buzzer.style.background = 'linear-gradient(#3b82f6,#1d4ed8)';
+        st.lcd = h('div', 'lcd', '0');
+        buzzer.appendChild(st.lcd);
+        st.dome = h('div', 'dome');
+        st.dome.style.marginTop = '14px';
+        buzzer.appendChild(st.dome);
+        st.counter = st.lcd;
+        const tap = (e) => {
           e.preventDefault();
-          if (st.btn.disabled) return;
+          if (st.disabled) return;
           st.local++;
-          st.counter.textContent = st.local;
+          st.lcd.textContent = st.local;
+          st.dome.style.transform = 'scale(0.92)';
+          setTimeout(() => (st.dome.style.transform = ''), 60);
           st.ctx.send({ type: 'tap' });
           Sound.play('tap');
-        });
-        st.wrap.appendChild(st.btn);
+        };
+        st.dome.addEventListener('pointerdown', tap);
+        st.disabled = true;
+        root.appendChild(buzzer);
       },
       update(state) {
         st.state = state;
         if (state.phase === 'countdown') {
-          st.counter.textContent = state.count;
-          st.btn.disabled = true;
+          st.lcd.textContent = state.count;
+          st.disabled = true;
+          st.dome.style.filter = 'grayscale(0.6)';
         } else if (state.phase === 'tap') {
-          st.btn.disabled = false;
+          st.disabled = false;
+          st.dome.style.filter = '';
           // Toon de server-telling als die er is (autoritatief).
           const sv = state.counts && state.counts[st.ctx.me];
-          if (typeof sv === 'number') st.counter.textContent = Math.max(sv, st.local);
+          if (typeof sv === 'number') st.lcd.textContent = Math.max(sv, st.local);
         }
       },
       unmount() {
@@ -294,24 +382,28 @@
         st.hidden = false;
         clear(root);
         root.appendChild(h('div', 'mg-title', '🐻 De Berenrace'));
-        st.track = h('div');
-        st.track.style.cssText =
-          'position:relative;height:120px;background:linear-gradient(#bbf7d0,#86efac);border-radius:18px;overflow:hidden;margin:6px 0;';
+
+        st.track = h('div', 'scene-track');
+        st.track.appendChild(h('div', 'grass'));
+        // Beer (achtervolger) links.
         st.bear = h('div', null, '🐻');
-        st.bear.style.cssText = 'position:absolute;bottom:14px;left:0;font-size:54px;transition:left .15s linear;';
-        st.runner = h('div', null, '🏃');
-        st.runner.style.cssText = 'position:absolute;bottom:14px;right:10px;font-size:48px;';
+        st.bear.style.cssText = 'position:absolute;bottom:8px;left:2%;font-size:56px;transition:left .15s linear;z-index:2;';
+        // Eigen personage rent rechts.
+        st.runnerWrap = h('div', 'runner-fig');
+        st.runnerWrap.style.right = '8%';
+        st.runnerWrap.appendChild(charEl(myChar(ctx), 'run'));
         st.track.appendChild(st.bear);
-        st.track.appendChild(st.runner);
+        st.track.appendChild(st.runnerWrap);
         root.appendChild(st.track);
-        st.time = h('div', 'mg-instruct', '0.0s');
+
+        st.time = h('div', 'mg-instruct', 'Klaar voor de start…');
         root.appendChild(st.time);
-        st.btn = h('button', 'big-button', 'VERSTOP JE!');
+        st.btn = h('button', 'big-button', 'VERSTOP JE! 🌳');
         st.btn.onclick = () => {
           if (st.hidden) return;
           st.hidden = true;
           st.ctx.send({ type: 'hide' });
-          st.runner.textContent = '🌳';
+          st.runnerWrap.innerHTML = '<div style="font-size:64px">🌳</div>';
           st.btn.textContent = 'Verstopt! 🤫';
           st.btn.disabled = true;
           st.btn.classList.add('green');
@@ -325,9 +417,13 @@
           return;
         }
         const prog = state.bear || 0;
-        st.bear.style.left = 10 + prog * 70 + '%';
-        st.time.textContent = ((state.elapsed || 0) / 1000).toFixed(1) + 's';
-        if (prog > 0.85 && !st.hidden) st.btn.style.background = '#b91c1c';
+        st.bear.style.left = 2 + prog * 70 + '%';
+        st.bear.style.fontSize = 56 + prog * 18 + 'px';
+        st.time.textContent = ((state.elapsed || 0) / 1000).toFixed(1) + 's  🐻';
+        if (prog > 0.8 && !st.hidden) {
+          st.btn.style.background = '#b91c1c';
+          Sound.play && (state.elapsed % 1000 < 120) && Sound.play('bear');
+        }
       },
       unmount() {},
     };
@@ -347,9 +443,15 @@
         root.appendChild(h('div', 'mg-title', '👁️ Schermstaren'));
         st.info = h('div', 'mg-instruct', 'Leg je vinger op het vlak hieronder.');
         root.appendChild(st.info);
+        const charWrap = h('div');
+        charWrap.style.cssText = 'text-align:center;height:90px;';
+        const ce = charEl(myChar(ctx), 'stand');
+        ce.querySelector('svg').style.height = '90px';
+        charWrap.appendChild(ce);
+        root.appendChild(charWrap);
         st.pad = h('div');
         st.pad.style.cssText =
-          'height:42vh;border-radius:20px;background:#1e1b4b;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;text-align:center;touch-action:none;';
+          'height:34vh;border-radius:20px;background:radial-gradient(circle at 50% 40%,#4c1d95,#1e1b4b);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;text-align:center;touch-action:none;box-shadow:inset 0 0 30px rgba(0,0,0,0.5);';
         st.pad.textContent = 'Houd vast';
         st.pad.addEventListener('pointerdown', (e) => {
           e.preventDefault();

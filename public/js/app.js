@@ -75,37 +75,15 @@
   function buildCreatorControls() {
     const wrap = $('creator-controls');
     wrap.innerHTML = '';
-    const fields = [
-      { key: 'shape', label: 'Vorm', list: Char.SHAPES },
-      { key: 'eyes', label: 'Ogen', list: Char.EYES },
-      { key: 'mouth', label: 'Mond', list: Char.MOUTHS },
-      { key: 'hat', label: 'Hoedje', list: Char.HATS },
-    ];
-    // Kleur
-    wrap.appendChild(colorRow());
-    // Overige opties
-    fields.forEach((field) => {
-      const key = field.key;
-      const row = document.createElement('div');
-      row.className = 'ctrl-row';
-      row.appendChild(label(field.label));
-      const list = document.createElement('div');
-      list.className = 'opt-list';
-      field.list.forEach((val) => {
-        const o = document.createElement('button');
-        o.className = 'opt' + (character[key] === val ? ' selected' : '');
-        o.textContent = val;
-        o.onclick = () => {
-          character[key] = val;
-          Sound.play('button');
-          buildCreatorControls();
-          drawPreview();
-        };
-        list.appendChild(o);
-      });
-      row.appendChild(list);
-      wrap.appendChild(row);
-    });
+    // Kleur-swatches
+    wrap.appendChild(swatchRow('Huidskleur', 'skin', Char.SKINS));
+    wrap.appendChild(optRow('Haarstijl', 'hair', Char.HAIR_STYLES));
+    wrap.appendChild(swatchRow('Haarkleur', 'hairColor', Char.HAIR_COLORS, true));
+    wrap.appendChild(optRow('Lengte', 'height', Char.HEIGHTS));
+    wrap.appendChild(optRow('Postuur', 'build', Char.BUILDS));
+    wrap.appendChild(optRow('Gezicht', 'face', Char.FACES));
+    wrap.appendChild(swatchRow('Shirt', 'top', Char.COLORS));
+    wrap.appendChild(swatchRow('Broek', 'bottom', ['#2b2d42', '#3a3a44', '#5b3a1a', '#1b3a5b', '#7a1f3d', '#2d6a4f', '#4a4e69', '#1a1a1a']));
   }
   function label(txt) {
     const l = document.createElement('div');
@@ -113,25 +91,46 @@
     l.textContent = txt;
     return l;
   }
-  function colorRow() {
+  function optRow(labelTxt, key, list) {
     const row = document.createElement('div');
     row.className = 'ctrl-row';
-    row.appendChild(label('Kleur'));
-    const list = document.createElement('div');
-    list.className = 'opt-list';
-    Char.COLORS.forEach((col) => {
-      const s = document.createElement('div');
-      s.className = 'swatch' + (character.color === col ? ' selected' : '');
-      s.style.background = col;
-      s.onclick = () => {
-        character.color = col;
+    row.appendChild(label(labelTxt));
+    const wrap = document.createElement('div');
+    wrap.className = 'opt-list';
+    list.forEach((val) => {
+      const o = document.createElement('button');
+      o.className = 'opt' + (character[key] === val ? ' selected' : '');
+      o.textContent = val;
+      o.onclick = () => {
+        character[key] = val;
         Sound.play('button');
         buildCreatorControls();
         drawPreview();
       };
-      list.appendChild(s);
+      wrap.appendChild(o);
     });
-    row.appendChild(list);
+    row.appendChild(wrap);
+    return row;
+  }
+  function swatchRow(labelTxt, key, colors, ring) {
+    const row = document.createElement('div');
+    row.className = 'ctrl-row';
+    row.appendChild(label(labelTxt));
+    const wrap = document.createElement('div');
+    wrap.className = 'opt-list';
+    colors.forEach((col) => {
+      const s = document.createElement('div');
+      s.className = 'swatch' + (character[key] === col ? ' selected' : '');
+      s.style.background = col;
+      s.onclick = () => {
+        character[key] = col;
+        Sound.play('button');
+        buildCreatorControls();
+        drawPreview();
+      };
+      wrap.appendChild(s);
+    });
+    row.appendChild(wrap);
     return row;
   }
 
@@ -202,6 +201,8 @@
   // ---- Lobby ----
   function renderLobby(state, isHost) {
     showScreen('lobby');
+    wheelSpunRound = -1;
+    wheelSpinning = false;
     $('lobby-code').textContent = state.code;
     const grid = $('lobby-players');
     grid.innerHTML = '';
@@ -252,13 +253,36 @@
     return n;
   }
 
-  // ---- Intro ----
+  // ---- Intro (rad draait, daarna de uitleg-kaart) ----
+  let wheelSpunRound = -1;
+  let wheelSpinning = false;
+  const WHEEL_COLORS = ['#ff6b6b', '#ffd23f', '#4ecdc4', '#5b8cff', '#c77dff', '#ff8fab', '#8ac926', '#ff9f1c'];
+
   function renderIntro(state, isHost) {
     showScreen('intro');
     const g = state.currentGame || {};
     const tb = g.tiebreak;
-    $('intro-round').textContent = tb ? '⚔️ Tiebreak' : 'Ronde ' + (state.roundIndex + 1) + '/' + state.totalRounds;
-    $('intro-title').textContent = g.title || '';
+    const wheel = state.wheel;
+
+    // Rad alleen bij een gewone ronde (niet bij tiebreak) en één keer per ronde.
+    if (!tb && wheel && wheel.round !== wheelSpunRound) {
+      if (wheelSpinning) return; // niet verstoren tijdens het draaien
+      spinWheel(state, isHost);
+      return;
+    }
+    if (wheelSpinning) return;
+    $('intro-wheel').classList.add('hidden');
+    $('intro-main').classList.remove('hidden');
+    fillIntro(state, isHost);
+  }
+
+  function fillIntro(state, isHost) {
+    const g = state.currentGame || {};
+    const tb = g.tiebreak;
+    $('intro-round').textContent = tb
+      ? '⚔️ Tiebreak'
+      : 'Ronde ' + (state.roundIndex + 1) + '/' + state.totalRounds;
+    $('intro-title').textContent = (g.emoji ? g.emoji + ' ' : '') + (g.title || '');
     $('intro-theme').textContent = tb
       ? 'Gelijkspel! ' + ((state.mg && state.mg.leaderNames) || []).join(' & ') + ' strijden om de winst.'
       : g.theme || '';
@@ -277,6 +301,66 @@
     } else {
       ctrl.appendChild(waitNote('Wachten tot de host de ronde start…'));
     }
+  }
+
+  function spinWheel(state, isHost) {
+    const wheel = state.wheel;
+    wheelSpinning = true;
+    wheelSpunRound = wheel.round;
+    $('intro-main').classList.add('hidden');
+    $('intro-wheel').classList.remove('hidden');
+    $('wheel-result').textContent = '';
+
+    const disc = $('wheel-disc');
+    disc.className = 'wheel';
+    disc.style.transform = 'rotate(0deg)';
+    disc.innerHTML = '';
+
+    const opts = wheel.options;
+    const n = opts.length;
+    const seg = 360 / n;
+    // Gekleurde taart-achtergrond via conic-gradient.
+    const stops = opts
+      .map((o, i) => WHEEL_COLORS[i % WHEEL_COLORS.length] + ' ' + (i * seg) + 'deg ' + ((i + 1) * seg) + 'deg')
+      .join(', ');
+    disc.style.background = 'conic-gradient(' + stops + ')';
+    // Emoji-labels rond het rad.
+    const R = Math.min(window.innerWidth * 0.86, 340) * 0.36;
+    opts.forEach((o, i) => {
+      const ang = (i + 0.5) * seg;
+      const span = document.createElement('span');
+      span.className = 'wheel-seg';
+      // Radiaal geplaatst; de gekozen emoji eindigt zo precies rechtop onder de pointer.
+      span.style.cssText =
+        'width:auto;height:auto;left:50%;top:50%;clip-path:none;padding:0;' +
+        'transform:translate(-50%,-50%) rotate(' + ang + 'deg) translateY(-' + R + 'px);';
+      span.textContent = o.emoji;
+      disc.appendChild(span);
+    });
+
+    const selIndex = Math.max(0, opts.findIndex((o) => o.id === wheel.selectedId));
+    const selCenter = (selIndex + 0.5) * seg;
+    const finalRot = 360 * 5 - selCenter; // 5 volle slagen, dan uitlijnen op de pointer
+    disc.style.setProperty('--spin-to', finalRot + 'deg');
+
+    // Trigger de animatie.
+    void disc.offsetWidth;
+    disc.classList.add('spinning');
+    Sound.play('tick');
+    const ticker = setInterval(() => Sound.play('tick'), 350);
+
+    setTimeout(() => {
+      clearInterval(ticker);
+      const sel = opts[selIndex];
+      $('wheel-result').textContent = sel.emoji + ' ' + sel.title + '!';
+      Sound.play('reveal');
+      setTimeout(() => {
+        wheelSpinning = false;
+        $('intro-wheel').classList.add('hidden');
+        $('intro-main').classList.remove('hidden');
+        fillIntro(state, isHost);
+      }, 1100);
+    }, 4300);
   }
 
   // ---- Spelen ----
@@ -320,6 +404,11 @@
       rev.ranking.forEach((r) => body.appendChild(resultRow(r, r.winner, false, r.winner ? '👑' : '')));
     } else {
       $('reveal-title').textContent = rev.gameTitle;
+      const maxScore0 = Math.max.apply(null, rev.ranking.map((r) => r.roundScore));
+      // Viering voor de meest-middelmatige (ronde-winnaar).
+      if (maxScore0 > 0) {
+        body.appendChild(winnerSpotlight(rev.ranking[0]));
+      }
       // Speciale visual
       const mod = MG[rev.gameId];
       if (mod && mod.revealVisual) {
@@ -328,7 +417,7 @@
           if (v) body.appendChild(v);
         } catch (e) {}
       }
-      const maxScore = Math.max.apply(null, rev.ranking.map((r) => r.roundScore));
+      const maxScore = maxScore0;
       rev.ranking.forEach((r) => {
         const winner = r.roundScore === maxScore && maxScore > 0;
         const loser = r.roundScore === 0;
@@ -354,6 +443,46 @@
     } else {
       ctrl.appendChild(waitNote('Wachten op de host…'));
     }
+  }
+
+  const WIN_LINES = [
+    '🌟 Lekker gemiddeld! 🌟',
+    '🏅 Precies de middelmaat!',
+    '✨ Goud voor het midden!',
+    '👑 Heerlijk doorsnee!',
+  ];
+  function winnerSpotlight(row) {
+    const box = document.createElement('div');
+    box.className = 'winner-spotlight';
+    const banner = document.createElement('div');
+    banner.className = 'wbanner';
+    banner.textContent = WIN_LINES[Math.floor(Math.random() * WIN_LINES.length)];
+    box.appendChild(banner);
+    box.appendChild(Char.el(row.character || {}, '', { pose: 'cheer' }));
+    const name = document.createElement('div');
+    name.className = 'wname';
+    name.textContent = row.name + ' wint deze ronde!';
+    box.appendChild(name);
+    // Sparkles
+    const spots = [
+      [12, 30],
+      [85, 24],
+      [22, 70],
+      [78, 66],
+      [50, 14],
+      [60, 84],
+    ];
+    spots.forEach((p, i) => {
+      const s = document.createElement('span');
+      s.className = 'spark';
+      s.textContent = i % 2 ? '✨' : '⭐';
+      s.style.left = p[0] + '%';
+      s.style.top = p[1] + '%';
+      s.style.animationDelay = (i * 0.18).toFixed(2) + 's';
+      box.appendChild(s);
+    });
+    Sound.play('win');
+    return box;
   }
 
   function resultRow(r, winner, loser, medal, showScore) {
@@ -425,9 +554,11 @@
     const cls = ['p2', 'p1', 'p3'];
     order.forEach((p, i) => {
       if (!p) return;
+      const isWin = cls[i] === 'p1';
       const spot = document.createElement('div');
-      spot.className = 'podium-spot ' + cls[i] + (cls[i] === 'p1' ? ' winner' : '');
-      spot.appendChild(Char.el(p.character));
+      spot.className = 'podium-spot ' + cls[i] + (isWin ? ' winner' : '');
+      if (isWin) spot.appendChild(h('div', 'crown', '👑'));
+      spot.appendChild(Char.el(p.character, '', { pose: isWin ? 'cheer' : 'stand' }));
       spot.appendChild(h('div', 'pn', p.name));
       const stand = document.createElement('div');
       stand.className = 'stand';

@@ -173,15 +173,15 @@ class GameEngine {
       }
       room.podium = null;
 
-      const selected = pickGames(
-        [...this.minigames.values()],
-        room.totalRounds,
-        this.rng
-      );
+      // Het rad: start met alle minigames; elke gespeelde verdwijnt eruit.
+      let remaining = [...this.minigames.values()];
+      const rounds = Math.min(room.totalRounds, remaining.length);
 
-      for (let r = 0; r < selected.length; r++) {
+      for (let r = 0; r < rounds; r++) {
         if (this.aborted) return;
-        const game = selected[r];
+        // Kies live uit het resterende pool (server-autoritair).
+        const idx = Math.floor(this.rng() * remaining.length);
+        const game = remaining[idx];
         room.roundIndex = r;
         room.currentGame = {
           id: game.id,
@@ -189,9 +189,18 @@ class GameEngine {
           theme: game.theme,
           rules: game.rules,
           type: game.type,
+          emoji: game.emoji,
         };
+        // Rad-data: alle opties die nog op het rad staan + de gekozen game.
+        room.wheel = {
+          round: r,
+          selectedId: game.id,
+          options: remaining.map((g) => ({ id: g.id, title: g.title, emoji: g.emoji })),
+        };
+        // Verwijder de gekozen game van het rad voor de volgende ronde.
+        remaining = remaining.filter((g) => g.id !== game.id);
 
-        // --- Intro ---
+        // --- Intro (rad draait, daarna de uitleg-kaart) ---
         room.phase = 'intro';
         room.mg = null;
         room.reveal = null;
@@ -336,8 +345,10 @@ class GameEngine {
       rules: game.rules,
       type: game.type,
       tiebreak: true,
+      emoji: game.emoji,
     };
     room.reveal = null;
+    room.wheel = null; // geen rad bij de tiebreak
     room.mg = { tiebreak: true, leaderNames: leaders.map((l) => l.name) };
     this.broadcast();
     await this.waitForContinue();

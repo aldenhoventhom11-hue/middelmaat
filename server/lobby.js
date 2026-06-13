@@ -52,6 +52,7 @@ class Room {
     this.phase = 'lobby'; // lobby | intro | playing | reveal | standings | podium
     this.engine = null; // GameEngine wanneer een spel loopt
     this.mg = null; // publieke minigame-state voor de client
+    this.wheel = null; // rad-data (opties + gekozen game) bij de ronde-intro
     this.reveal = null; // ronde-onthulling
     this.podium = null;
     this.roundIndex = -1;
@@ -89,6 +90,7 @@ class Room {
       roundIndex: this.roundIndex,
       currentGame: this.currentGame,
       mg: this.mg,
+      wheel: this.wheel,
       reveal: this.reveal,
       podium: this.podium,
       players,

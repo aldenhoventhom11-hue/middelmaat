@@ -14,9 +14,24 @@ const modules = [
   require('./cirkeltrek'), // 10
 ];
 
+// Emoji per minigame (voor het rad en de intro-kaart).
+const EMOJI = {
+  berenrace: '🐻',
+  doolhof: '🌀',
+  ballon: '🎈',
+  verdeelheers: '😈',
+  gemiddeldgetal: '🔢',
+  schermstaren: '👁️',
+  tikkampioen: '👆',
+  pizzapunt: '🍕',
+  blindeschutter: '🎯',
+  cirkeltrek: '⭕',
+};
+
 const minigames = new Map();
 for (const m of modules) {
   if (minigames.has(m.id)) throw new Error('Dubbele minigame-id: ' + m.id);
+  m.emoji = EMOJI[m.id] || '🎮';
   minigames.set(m.id, m);
 }
 

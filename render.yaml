@@ -1,0 +1,15 @@
+# Render deploy-config voor Middelmaat.
+# Koppel de GitHub-repo aan Render -> "New +" -> "Blueprint" -> kies deze repo.
+# Render leest dit bestand en zet de service automatisch op.
+services:
+  - type: web
+    name: middelmaat
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.1
+    autoDeploy: true

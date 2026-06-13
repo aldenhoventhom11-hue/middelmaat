@@ -53,6 +53,19 @@ const scenarios = {
     for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: Math.min(20, i + 1) });
     await h.flush();
   },
+  async schatten(h, n) {
+    await h.flush();
+    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: Math.min(100, i * 8) });
+    await h.flush();
+  },
+  async toren(h, n) {
+    await h.advance(2400); // voorbij aftelling
+    for (let i = 0; i < n; i++) {
+      await h.advance(250); // gestaffeld, ruim binnen de 9s
+      h.emit('p' + i, { type: 'stop' });
+    }
+    await h.advance(10000);
+  },
   async verdeelheers(h, n) {
     await h.flush();
     for (let i = 0; i < n; i++) {

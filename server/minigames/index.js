@@ -13,6 +13,8 @@ const modules = [
   require('./blindeschutter'), // 9
   require('./cirkeltrek'), // 10
   require('./lift'), // 11
+  require('./toren'), // 12
+  require('./schatten'), // 13
 ];
 
 // Emoji per minigame (voor het rad en de intro-kaart).
@@ -28,6 +30,8 @@ const EMOJI = {
   blindeschutter: '🎯',
   cirkeltrek: '⭕',
   lift: '🛗',
+  toren: '🧱',
+  schatten: '🫙',
 };
 
 const minigames = new Map();

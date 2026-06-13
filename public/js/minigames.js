@@ -83,28 +83,50 @@
           st.visBox.appendChild(cfg.visual(st.value, cfg));
         };
         refreshVis();
-        const stepper = h('div', 'stepper');
-        const minus = h('button', null, '−');
-        const val = h('div', 'value', String(st.value));
-        const plus = h('button', null, '+');
         const min = cfg.min,
           max = cfg.max;
-        minus.onclick = () => {
-          st.value = Math.max(min, st.value - 1);
-          val.textContent = st.value;
-          refreshVis();
-          Sound.play('button');
-        };
-        plus.onclick = () => {
-          st.value = Math.min(max, st.value + 1);
-          val.textContent = st.value;
-          refreshVis();
-          Sound.play('button');
-        };
-        stepper.appendChild(minus);
-        stepper.appendChild(val);
-        stepper.appendChild(plus);
-        st.body.appendChild(stepper);
+        if (cfg.slider) {
+          // Schuifbalk-variant (handig voor grote bereiken zoals 0–100).
+          const wrap = h('div');
+          wrap.style.cssText = 'display:flex;align-items:center;gap:12px;margin:8px 0;';
+          const val = h('div', 'value', String(st.value));
+          const range = document.createElement('input');
+          range.type = 'range';
+          range.min = String(min);
+          range.max = String(max);
+          range.value = String(st.value);
+          range.className = 'slider';
+          range.style.flex = '1';
+          range.addEventListener('input', () => {
+            st.value = Number(range.value);
+            val.textContent = st.value;
+            refreshVis();
+          });
+          wrap.appendChild(range);
+          wrap.appendChild(val);
+          st.body.appendChild(wrap);
+        } else {
+          const stepper = h('div', 'stepper');
+          const minus = h('button', null, '−');
+          const val = h('div', 'value', String(st.value));
+          const plus = h('button', null, '+');
+          minus.onclick = () => {
+            st.value = Math.max(min, st.value - 1);
+            val.textContent = st.value;
+            refreshVis();
+            Sound.play('button');
+          };
+          plus.onclick = () => {
+            st.value = Math.min(max, st.value + 1);
+            val.textContent = st.value;
+            refreshVis();
+            Sound.play('button');
+          };
+          stepper.appendChild(minus);
+          stepper.appendChild(val);
+          stepper.appendChild(plus);
+          st.body.appendChild(stepper);
+        }
         if (cfg.hint) st.body.appendChild(h('div', 'mg-instruct', cfg.hint));
         const submit = h('button', 'btn primary big full', 'Inleveren');
         submit.onclick = () => {
@@ -254,6 +276,93 @@
       return d;
     },
   });
+
+  // Schatten in de Pot — schat het aantal snoepjes
+  function jarSvg() {
+    let s = '<svg width="120" height="120" viewBox="0 0 100 100">';
+    s += '<rect x="28" y="14" width="44" height="8" rx="3" fill="#9aa6b3"/>';
+    s += '<path d="M26 24 q24 -6 48 0 l-3 64 q-21 6 -42 0 Z" fill="rgba(180,210,235,0.5)" stroke="#9aa6b3" stroke-width="2"/>';
+    const cols = ['#ff6b6b', '#ffd23f', '#4ecdc4', '#c77dff', '#8ac926', '#ff9f1c'];
+    let i = 0;
+    for (let y = 0; y < 6; y++) {
+      for (let x = 0; x < 5; x++) {
+        const cx = 34 + x * 8 + (y % 2) * 4;
+        const cy = 78 - y * 9;
+        if (cx > 70) continue;
+        s += '<circle cx="' + cx + '" cy="' + cy + '" r="3.6" fill="' + cols[i++ % cols.length] + '"/>';
+      }
+    }
+    return s + '</svg>';
+  }
+  MG.schatten = numberGame({
+    title: 'Schatten in de Pot',
+    emoji: '🫙',
+    instruction: 'Hoeveel snoepjes zitten er in de pot? Schat (0–100). De gemiddelde schatting wint.',
+    min: 0,
+    max: 100,
+    start: 50,
+    slider: true,
+    visual() {
+      const d = document.createElement('div');
+      d.innerHTML = jarSvg();
+      return d;
+    },
+  });
+
+  // De Toren — stapel en stop op tijd
+  MG.toren = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.stopped = false;
+        st.shown = -1;
+        st.cur = 1;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '🧱 De Toren'));
+        st.info = h('div', 'mg-instruct', 'De toren groeit — stop op tijd! Niet te hoog, niet te laag.');
+        root.appendChild(st.info);
+        st.tower = h('div');
+        st.tower.style.cssText =
+          'height:280px;display:flex;flex-direction:column-reverse;align-items:center;justify-content:flex-start;gap:2px;padding-bottom:6px;';
+        root.appendChild(st.tower);
+        st.btn = h('button', 'big-button', 'STOP! 🧱');
+        st.btn.disabled = true;
+        st.btn.onclick = () => {
+          if (st.stopped) return;
+          st.stopped = true;
+          st.ctx.send({ type: 'stop' });
+          st.btn.textContent = 'Gestopt op ' + st.cur + ' blokken! 🧱';
+          st.btn.disabled = true;
+          st.btn.classList.add('green');
+          Sound.play('pop');
+        };
+        root.appendChild(st.btn);
+      },
+      update(state) {
+        if (state.phase === 'countdown') {
+          st.info.textContent = 'Klaar… ' + state.count;
+          return;
+        }
+        const prog = Math.min(1, (state.elapsed || 0) / (state.rise || 9000));
+        const blocks = Math.max(1, Math.round(prog * 20));
+        st.cur = blocks;
+        if (blocks !== st.shown && !st.stopped) {
+          st.shown = blocks;
+          st.tower.innerHTML = '';
+          for (let i = 0; i < blocks; i++) {
+            const bk = h('div');
+            const w = 78 - Math.min(46, i * 1.4);
+            bk.style.cssText =
+              'width:' + w + 'px;height:12px;border-radius:3px;background:hsl(' + (18 + i * 12) + ',72%,55%);box-shadow:inset 0 -2px 0 rgba(0,0,0,0.22);';
+            st.tower.appendChild(bk);
+          }
+        }
+        if (!st.stopped) st.btn.disabled = false;
+      },
+      unmount() {},
+    };
+  })();
 
   // =========================================================
   // Verdeel & Heers — strafpunten verdelen
@@ -1080,6 +1189,16 @@
       loopDemo(b, (i) => scene('<div style="font-size:' + (26 + (i % 6) * 8) + 'px">⭕</div>') + cap('Niet de grootste of kleinste'), 320),
     lift: (b) =>
       loopDemo(b, (i) => scene(liftSvg(1 + (i % 5) * 4, 20)) + cap('Stap uit op de gemiddelde verdieping'), 600),
+    toren: (b) =>
+      loopDemo(b, (i) => {
+        const p = i % 9;
+        if (p >= 7) return scene('<div style="font-size:40px">🧱✋</div>') + cap('STOP op tijd!');
+        let blocks = '';
+        for (let k = 0; k <= p; k++) blocks += '<div style="width:' + (44 - k * 4) + 'px;height:8px;margin:1px auto;border-radius:2px;background:hsl(' + (20 + k * 16) + ',72%,55%)"></div>';
+        return scene('<div style="display:flex;flex-direction:column-reverse">' + blocks + '</div>') + cap('Niet te hoog, niet te laag');
+      }, 300),
+    schatten: (b) =>
+      loopDemo(b, (i) => scene(jarSvg() + '<div style="font-size:30px;font-weight:900;color:#5b21b6">' + (20 + (i % 7) * 10) + '?</div>') + cap('Schat de gemiddelde hoeveelheid'), 450),
   };
   Object.keys(DEMOS).forEach((k) => {
     if (MG[k]) MG[k].demo = DEMOS[k];

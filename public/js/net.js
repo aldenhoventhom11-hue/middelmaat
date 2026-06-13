@@ -55,8 +55,11 @@
       }
       return r;
     },
-    start() {
-      socket.emit('lobby:start');
+    start(rounds) {
+      socket.emit('lobby:start', { rounds });
+    },
+    chat(text) {
+      socket.emit('lobby:chat', { text });
     },
     next() {
       socket.emit('game:next');

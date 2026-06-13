@@ -20,6 +20,19 @@
   let podiumDone = false;
   let lastReveal = null;
   let introDemoStop = null; // stopt de lopende intro-demo-animatie
+  let currentMusic = null;
+  let revealTimers = [];
+  let selectedRounds = 5;
+  function setMusic(name) {
+    if (currentMusic === name) return;
+    currentMusic = name;
+    if (name) Sound.startMusic(name);
+    else Sound.stopMusic();
+  }
+  function clearRevealTimers() {
+    revealTimers.forEach(clearTimeout);
+    revealTimers = [];
+  }
 
   // ---- UI-helpers ----
   function showScreen(name) {
@@ -83,6 +96,9 @@
     wrap.appendChild(sliderRow('Lengte', 'height', '🧍 klein', '🦒 lang'));
     wrap.appendChild(sliderRow('Postuur', 'build', '🪶 dun', '🧸 stevig'));
     wrap.appendChild(optRow('Gezicht', 'face', Char.FACES));
+    wrap.appendChild(optRow('Bril', 'glasses', Char.GLASSES));
+    wrap.appendChild(optRow('Baard', 'beard', Char.BEARDS));
+    wrap.appendChild(optRow('Hoofd', 'hat', Char.ACC_HATS));
     wrap.appendChild(swatchRow('Shirt', 'top', Char.COLORS));
     wrap.appendChild(optRow('Kleding', 'outfit', Char.OUTFITS));
     wrap.appendChild(swatchRow('Broek/rok-kleur', 'bottom', Char.PANTS));
@@ -212,6 +228,10 @@
       $('round-pill').textContent = '🏁 Klaar';
     }
 
+    // Muziek: alleen in lobby & podium.
+    setMusic(phase === 'lobby' ? 'lobby' : phase === 'podium' ? 'podium' : null);
+    // Onthulling-timers opruimen zodra we de onthulling verlaten.
+    if (phase !== 'reveal') clearRevealTimers();
     // Intro-demo stoppen zodra we de intro verlaten.
     if (phase !== 'intro' && introDemoStop) {
       introDemoStop();
@@ -247,17 +267,34 @@
       navigator.clipboard && navigator.clipboard.writeText(state.code);
       toast('Code gekopieerd: ' + state.code);
     };
+    renderChat(state);
     const ctrl = $('lobby-controls');
     ctrl.innerHTML = '';
     const count = state.players.filter((p) => !p.waiting).length;
     if (isHost) {
+      // Rondes-keuze (3 / 5 / 7).
+      const rr = document.createElement('div');
+      rr.className = 'rounds-row';
+      rr.appendChild(h('span', 'rounds-label', 'Rondes:'));
+      [3, 5, 7].forEach((n) => {
+        const o = document.createElement('button');
+        o.className = 'opt' + (selectedRounds === n ? ' selected' : '');
+        o.textContent = n;
+        o.onclick = () => {
+          selectedRounds = n;
+          Sound.play('button');
+          renderLobby(state, isHost);
+        };
+        rr.appendChild(o);
+      });
+      ctrl.appendChild(rr);
       const btn = document.createElement('button');
       btn.className = 'btn primary big full';
       btn.textContent = count < 3 ? 'Wacht op spelers (' + count + '/3)' : 'Start het spel! (' + count + ')';
       btn.disabled = count < 3;
       btn.onclick = () => {
         Sound.play('start');
-        Net.start();
+        Net.start(selectedRounds);
       };
       ctrl.appendChild(btn);
     } else {
@@ -297,6 +334,32 @@
     n.textContent = txt;
     return n;
   }
+
+  function renderChat(state) {
+    const box = $('chat-messages');
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    box.innerHTML = '';
+    (state.chat || []).forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'chat-msg' + (m.id === state.you.id ? ' me' : '');
+      row.innerHTML = '<b></b><span></span>';
+      row.querySelector('b').textContent = m.name + ': ';
+      row.querySelector('span').textContent = m.text;
+      box.appendChild(row);
+    });
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+  function sendChat() {
+    const inp = $('chat-input');
+    const t = inp.value.trim();
+    if (!t) return;
+    Net.chat(t);
+    inp.value = '';
+  }
+  $('chat-send').onclick = sendChat;
+  $('chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendChat();
+  });
 
   // ---- Intro (rad draait, daarna de uitleg-kaart) ----
   let wheelSpunRound = -1;
@@ -478,23 +541,19 @@
   // ---- Onthulling ----
   function renderReveal(state, isHost) {
     showScreen('reveal');
+    clearRevealTimers();
     const rev = state.reveal;
     lastReveal = rev;
-    Sound.play('reveal');
     const body = $('reveal-body');
     body.innerHTML = '';
 
     if (rev.tiebreak) {
+      Sound.play('reveal');
       $('reveal-title').textContent = '⚔️ Tiebreak: ' + rev.gameTitle;
       rev.ranking.forEach((r) => body.appendChild(resultRow(r, r.winner, false, r.winner ? '👑' : '')));
     } else {
       $('reveal-title').textContent = rev.gameTitle;
-      const maxScore0 = Math.max.apply(null, rev.ranking.map((r) => r.roundScore));
-      // Viering voor de meest-middelmatige (ronde-winnaar).
-      if (maxScore0 > 0) {
-        body.appendChild(winnerSpotlight(rev.ranking[0]));
-      }
-      // Speciale visual
+      // Speciale visual (bv. ballon-knal, banen, cirkels) als context vooraf.
       const mod = MG[rev.gameId];
       if (mod && mod.revealVisual) {
         try {
@@ -502,15 +561,27 @@
           if (v) body.appendChild(v);
         } catch (e) {}
       }
-      const maxScore = maxScore0;
-      rev.ranking.forEach((r) => {
+      const maxScore = Math.max.apply(null, rev.ranking.map((r) => r.roundScore));
+      const list = document.createElement('div');
+      body.appendChild(list);
+      // Spanning: onthul van de slechtste naar de beste, één voor één.
+      const order = [...rev.ranking].sort((a, b) => a.roundScore - b.roundScore);
+      let i = 0;
+      const revealNext = () => {
+        if (i >= order.length) {
+          if (maxScore > 0) body.appendChild(winnerSpotlight(rev.ranking[0]));
+          body.appendChild(standingsBlock(rev.standings));
+          return;
+        }
+        const r = order[i];
+        i++;
         const winner = r.roundScore === maxScore && maxScore > 0;
         const loser = r.roundScore === 0;
-        const medal = winner ? '🥇' : '';
-        body.appendChild(resultRow(r, winner, loser, medal, true));
-      });
-      // Tussenstand eronder
-      body.appendChild(standingsBlock(rev.standings));
+        list.appendChild(resultRow(r, winner, loser, winner ? '🥇' : '', true));
+        Sound.play(i >= order.length && winner ? 'win' : 'tick');
+        revealTimers.push(setTimeout(revealNext, budget(order.length)));
+      };
+      revealNext();
     }
 
     const ctrl = $('reveal-controls');
@@ -528,6 +599,10 @@
     } else {
       ctrl.appendChild(waitNote('Wachten op de host…'));
     }
+  }
+  // Onthul-tempo: sneller bij veel spelers zodat het niet te lang duurt.
+  function budget(n) {
+    return n > 8 ? 320 : n > 5 ? 480 : 650;
   }
 
   const WIN_LINES = [
@@ -640,9 +715,11 @@
     order.forEach((p, i) => {
       if (!p) return;
       const isWin = cls[i] === 'p1';
+      const isLoser = p.id === pod.loserId && r.length > 1;
       const spot = document.createElement('div');
-      spot.className = 'podium-spot ' + cls[i] + (isWin ? ' winner' : '');
+      spot.className = 'podium-spot ' + cls[i] + (isWin ? ' winner' : '') + (isLoser ? ' loser-fig' : '');
       if (isWin) spot.appendChild(h('div', 'crown', '👑'));
+      if (isLoser) spot.appendChild(h('div', 'raincloud', '🌧️'));
       spot.appendChild(Char.el(p.character, '', { pose: isWin ? 'cheer' : 'stand' }));
       spot.appendChild(h('div', 'pn', p.name));
       const stand = document.createElement('div');
@@ -661,8 +738,9 @@
       rest.className = 'podium-rest';
       r.slice(3).forEach((p, i) => {
         const row = document.createElement('div');
-        row.className = 'result-row';
-        row.appendChild(h('span', 'medal', i + 4 + '.'));
+        const isLoser = p.id === pod.loserId;
+        row.className = 'result-row' + (isLoser ? ' loser' : '');
+        row.appendChild(h('span', 'medal', isLoser ? '🐌' : i + 4 + '.'));
         row.appendChild(Char.el(p.character));
         row.appendChild(h('span', 'rn', p.name));
         row.appendChild(h('span', 'rp', Math.round(p.total) + ''));

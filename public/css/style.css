@@ -1112,3 +1112,85 @@ h2 {
   line-height: 1;
   animation: jump 0.7s ease-in-out infinite;
 }
+.podium-spot .raincloud {
+  font-size: 28px;
+  line-height: 1;
+  animation: bob 1.6s ease-in-out infinite;
+}
+.podium-spot.loser-fig .char-svg svg {
+  filter: grayscale(0.4) brightness(0.92);
+  animation: droop 2s ease-in-out infinite;
+}
+@keyframes droop {
+  50% {
+    transform: translateY(3px) rotate(2deg);
+  }
+}
+
+/* Home: korte uitleg */
+.howto {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin: 22px auto 0;
+  max-width: 360px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+/* Rondes-keuze */
+.rounds-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 16px;
+  padding: 8px;
+}
+.rounds-label {
+  color: #fff;
+  font-weight: 800;
+}
+
+/* Lobby-chat */
+.chat-box {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 8px;
+  margin: 12px 0;
+}
+.chat-messages {
+  height: 120px;
+  overflow-y: auto;
+  font-size: 14px;
+  padding: 4px 6px;
+}
+.chat-msg {
+  margin: 2px 0;
+  word-break: break-word;
+}
+.chat-msg b {
+  color: var(--bg1);
+}
+.chat-msg.me b {
+  color: var(--bg2);
+}
+.chat-input-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.chat-input {
+  flex: 1;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  -webkit-user-select: text;
+  user-select: text;
+}

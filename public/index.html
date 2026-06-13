@@ -28,7 +28,12 @@
             <button class="btn big primary" data-go="create">Nieuwe lobby maken</button>
             <button class="btn big" data-go="join">Meedoen met code</button>
           </div>
-          <p class="hint">3 t/m 10 spelers · speel samen op je telefoon</p>
+          <p class="hint">3 t/m 20 spelers · speel samen op je telefoon</p>
+          <div class="howto">
+            <b>Hoe werkt het?</b> Je speelt 5 minigames. Het rare: je wilt
+            <b>niet</b> de beste of de slechtste zijn — je wilt <b>zo gemiddeld
+            mogelijk</b> zijn! De uitschieters krijgen 0 punten, het midden wint.
+          </div>
         </div>
       </section>
 
@@ -76,6 +81,13 @@
         </div>
         <p class="hint">Deel deze code zodat vrienden kunnen meedoen.</p>
         <div id="lobby-players" class="player-grid"></div>
+        <div id="lobby-chat" class="chat-box">
+          <div id="chat-messages" class="chat-messages"></div>
+          <div class="chat-input-row">
+            <input id="chat-input" class="chat-input" type="text" maxlength="120" placeholder="Typ een bericht…" autocomplete="off" />
+            <button id="chat-send" class="chip" type="button">Stuur</button>
+          </div>
+        </div>
         <div id="lobby-controls" class="sticky-actions"></div>
       </section>
 

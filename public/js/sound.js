@@ -81,6 +81,40 @@
     error: () => tone(160, 0.2, 'sawtooth', 0, 0.15),
   };
 
+  // ---- Achtergrondmuziek (lobby & podium) ----
+  let musicTimer = null;
+  const MELODIES = {
+    lobby: [
+      { f: 523, d: 0.26 }, { f: 587, d: 0.26 }, { f: 659, d: 0.26 }, { f: 587, d: 0.26 },
+      { f: 659, d: 0.26 }, { f: 784, d: 0.34 }, { f: 659, d: 0.26 }, { f: 0, d: 0.34 },
+      { f: 440, d: 0.26 }, { f: 523, d: 0.26 }, { f: 587, d: 0.34 }, { f: 0, d: 0.4 },
+    ],
+    podium: [
+      { f: 523, d: 0.2 }, { f: 659, d: 0.2 }, { f: 784, d: 0.2 }, { f: 1047, d: 0.42 },
+      { f: 880, d: 0.2 }, { f: 1047, d: 0.5 }, { f: 0, d: 0.3 },
+    ],
+  };
+  function stopMusic() {
+    if (musicTimer) {
+      clearTimeout(musicTimer);
+      musicTimer = null;
+    }
+  }
+  function startMusic(name) {
+    stopMusic();
+    const mel = MELODIES[name];
+    if (!mel) return;
+    ensure();
+    let i = 0;
+    const step = () => {
+      const note = mel[i % mel.length];
+      i++;
+      if (!muted && note.f > 0) tone(note.f, note.d * 0.85, 'triangle', 0, 0.045);
+      musicTimer = setTimeout(step, note.d * 1000);
+    };
+    step();
+  }
+
   window.Sound = {
     play(name) {
       if (muted) return;
@@ -96,6 +130,8 @@
     unlock() {
       ensure();
     },
+    startMusic,
+    stopMusic,
     toggleMute() {
       muted = !muted;
       return muted;

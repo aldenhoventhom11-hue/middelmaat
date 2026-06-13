@@ -9,6 +9,9 @@
   const FACES = ['blij', 'neutraal', 'stoer', 'verbaasd'];
   const GENDERS = ['man', 'vrouw'];
   const OUTFITS = ['broek', 'rok', 'jurk'];
+  const GLASSES = ['geen', 'rond', 'nerd', 'zonnebril'];
+  const BEARDS = ['geen', 'snor', 'sik', 'vol'];
+  const ACC_HATS = ['geen', 'pet', 'muts', 'hoge hoed', 'kroon', 'bloem'];
   const COLORS = ['#ff6b6b', '#ffd23f', '#4ecdc4', '#5b8cff', '#c77dff', '#ff8fab', '#8ac926', '#ff9f1c', '#ffffff', '#2b2d42'];
   const PANTS = ['#2b2d42', '#3a3a44', '#5b3a1a', '#1b3a5b', '#7a1f3d', '#2d6a4f', '#4a4e69', '#1a1a1a'];
 
@@ -53,7 +56,64 @@
       bottom: pickColor(spec.bottom, '#2b2d42'),
       outfit: pick(spec.outfit, OUTFITS, gender === 'vrouw' ? 'jurk' : 'broek'),
       face: pick(spec.face, FACES, 'blij'),
+      glasses: pick(spec.glasses, GLASSES, 'geen'),
+      beard: pick(spec.beard, BEARDS, 'geen'),
+      hat: pick(spec.hat, ACC_HATS, 'geen'),
     };
+  }
+
+  function glassesSvg(type, hcx, hcy) {
+    if (type === 'geen') return '';
+    const ex = 7.5, y = hcy - 1, r = 6.2;
+    const frame = '#241a12';
+    if (type === 'zonnebril') {
+      return (
+        `<circle cx="${hcx - ex}" cy="${y}" r="${r}" fill="#1a1a1a"/>` +
+        `<circle cx="${hcx + ex}" cy="${y}" r="${r}" fill="#1a1a1a"/>` +
+        `<line x1="${hcx - 1.5}" y1="${y}" x2="${hcx + 1.5}" y2="${y}" stroke="#1a1a1a" stroke-width="2"/>`
+      );
+    }
+    if (type === 'nerd') {
+      return (
+        `<rect x="${hcx - ex - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" rx="3" fill="rgba(255,255,255,0.25)" stroke="${frame}" stroke-width="2.4"/>` +
+        `<rect x="${hcx + ex - r}" y="${y - r}" width="${2 * r}" height="${2 * r}" rx="3" fill="rgba(255,255,255,0.25)" stroke="${frame}" stroke-width="2.4"/>` +
+        `<line x1="${hcx - 1.5}" y1="${y}" x2="${hcx + 1.5}" y2="${y}" stroke="${frame}" stroke-width="2.4"/>`
+      );
+    }
+    // rond
+    return (
+      `<circle cx="${hcx - ex}" cy="${y}" r="${r}" fill="rgba(255,255,255,0.2)" stroke="${frame}" stroke-width="2"/>` +
+      `<circle cx="${hcx + ex}" cy="${y}" r="${r}" fill="rgba(255,255,255,0.2)" stroke="${frame}" stroke-width="2"/>` +
+      `<line x1="${hcx - 1.5}" y1="${y}" x2="${hcx + 1.5}" y2="${y}" stroke="${frame}" stroke-width="2"/>`
+    );
+  }
+
+  function beardSvg(type, color, hcx, hcy, hr) {
+    if (type === 'geen') return '';
+    const c = color;
+    if (type === 'snor') return `<path d="M ${hcx - 8} ${hcy + 7} q4 4 8 0 q4 4 8 0 q-8 6 -16 0 Z" fill="${c}"/>`;
+    if (type === 'sik') return `<path d="M ${hcx - 4} ${hcy + 13} q4 7 8 0 q-4 4 -8 0 Z" fill="${c}"/>`;
+    // vol
+    return `<path d="M ${hcx - hr + 1} ${hcy + 2} Q ${hcx - hr + 2} ${hcy + hr} ${hcx} ${hcy + hr + 1} Q ${hcx + hr - 2} ${hcy + hr} ${hcx + hr - 1} ${hcy + 2} Q ${hcx} ${hcy + 9} ${hcx - hr + 1} ${hcy + 2} Z" fill="${c}"/>`;
+  }
+
+  function accHatSvg(type, hcx, hcy, hr) {
+    if (type === 'geen') return '';
+    const topY = hcy - hr;
+    switch (type) {
+      case 'pet':
+        return `<path d="M ${hcx - hr - 1} ${topY + 6} Q ${hcx} ${topY - 12} ${hcx + hr + 1} ${topY + 6} Z" fill="#2563eb"/><path d="M ${hcx + hr - 2} ${topY + 6} q 14 1 16 6 l -16 1 Z" fill="#1e40af"/>`;
+      case 'muts':
+        return `<path d="M ${hcx - hr - 1} ${topY + 8} Q ${hcx} ${topY - 16} ${hcx + hr + 1} ${topY + 8} Z" fill="#dc2626"/><rect x="${hcx - hr - 1}" y="${topY + 6}" width="${2 * hr + 2}" height="6" rx="3" fill="#fff"/><circle cx="${hcx}" cy="${topY - 12}" r="5" fill="#fff"/>`;
+      case 'hoge hoed':
+        return `<rect x="${hcx - hr - 3}" y="${topY + 2}" width="${2 * hr + 6}" height="6" rx="3" fill="#1a1a1a"/><rect x="${hcx - hr + 3}" y="${topY - 22}" width="${2 * hr - 6}" height="26" rx="2" fill="#1a1a1a"/><rect x="${hcx - hr + 3}" y="${topY - 6}" width="${2 * hr - 6}" height="5" fill="#b03a2e"/>`;
+      case 'kroon':
+        return `<path d="M ${hcx - hr + 2} ${topY + 6} l 3 -16 6 10 6 -14 6 14 6 -10 3 16 Z" fill="#ffd23f" stroke="#e0a800" stroke-width="1.5"/><circle cx="${hcx}" cy="${topY - 8}" r="2.5" fill="#ff5d8f"/>`;
+      case 'bloem':
+        return `<g fill="#ff5d8f"><circle cx="${hcx + hr - 4}" cy="${topY + 6}" r="5"/><circle cx="${hcx + hr - 10}" cy="${topY + 8}" r="5"/><circle cx="${hcx + hr + 2}" cy="${topY + 8}" r="5"/><circle cx="${hcx + hr - 2}" cy="${topY + 1}" r="5"/></g><circle cx="${hcx + hr - 4}" cy="${topY + 6}" r="3" fill="#ffd23f"/>`;
+      default:
+        return '';
+    }
   }
 
   function faceSvg(face, gender, hcx, hcy) {
@@ -241,11 +301,14 @@
     const head = `<ellipse cx="${hcx}" cy="${hcy}" rx="${hr}" ry="${hr + 1}" fill="${skin}" stroke="${skinDk}" stroke-width="0.8"/>`;
     const face = faceSvg(spec.face, spec.gender, hcx, hcy);
     const hair = hairSvg(spec.hair, spec.hairColor, hcx, hcy, hr, shoulderY);
+    const beard = beardSvg(spec.beard, spec.hairColor, hcx, hcy, hr);
+    const glasses = glassesSvg(spec.glasses, hcx, hcy);
+    const accHat = accHatSvg(spec.hat, hcx, hcy, hr);
 
     const tilt = pose === 'run' ? `rotate(-7 ${CX} ${feetY})` : '';
     const body =
       `<g ${tilt ? `transform="${tilt}"` : ''}>` +
-      legs + skirt + torso + arms + neck + hair.back + ears + head + hair.front + face +
+      legs + skirt + torso + arms + neck + hair.back + ears + head + beard + hair.front + face + glasses + accHat +
       `</g>`;
 
     return (
@@ -276,11 +339,14 @@
       bottom: r(PANTS),
       outfit: gender === 'vrouw' ? r(OUTFITS) : 'broek',
       face: r(FACES),
+      glasses: r(GLASSES),
+      beard: gender === 'man' ? r(BEARDS) : 'geen',
+      hat: r(ACC_HATS),
     };
   }
 
   window.Char = {
     render, el, randomSpec,
-    SKINS, HAIR_STYLES, HAIR_COLORS, FACES, GENDERS, OUTFITS, COLORS, PANTS,
+    SKINS, HAIR_STYLES, HAIR_COLORS, FACES, GENDERS, OUTFITS, GLASSES, BEARDS, ACC_HATS, COLORS, PANTS,
   };
 })();

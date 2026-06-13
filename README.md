@@ -1,8 +1,8 @@
 # Middelmaat 🥈
 
-Een mobiel-first multiplayer party-webgame waarin 3 t/m 10 spelers via een
+Een mobiel-first multiplayer party-webgame waarin 3 t/m 20 spelers via een
 lobby-code samenkomen, elk hun eigen cartoon-personage ontwerpen, en samen 5
-willekeurig gekozen minigames (uit 11) spelen. De clou van élke minigame: je
+willekeurig gekozen minigames (uit 13) spelen. De clou van élke minigame: je
 wilt **niet de beste of de slechtste** zijn — je wilt **zo gemiddeld mogelijk**
 zijn. De extremen verliezen, het midden wint. _Middelmaat is goud._
 
@@ -37,7 +37,7 @@ Dekt o.a.:
 - **`test/scoring.test.js`** — de scoreformule en tie-afhandeling, inclusief de
   exacte voorbeelden uit de spec (3→`[0,1,0]`, 5→`[0,1,2,1,0]`, enz.) en het
   `closest`-model van minigame 5.
-- **`test/minigames.test.js`** — alle 11 minigames met een gesimuleerde 3- en
+- **`test/minigames.test.js`** — alle 13 minigames met een gesimuleerde 3- en
   10-speler-sessie (virtuele klok, geen echte timers/sockets).
 - **`test/engine.test.js`** — volledig spelverloop, host-flow, disconnect →
   slechtste uitkomst, en de tiebreak.
@@ -61,7 +61,7 @@ server/
   lobby.js          Rooms, spelers, 6-tekens codes, host-logica
   game.js           GameEngine: rondebeheer, fase-transities, podium, tiebreak
   scoring.js        De middelmaat-scoring (symmetric + closest), hele punten
-  minigames/        Eén bestand per minigame (11) + gedeelde helpers + registry
+  minigames/        Eén bestand per minigame (13) + gedeelde helpers + registry
 public/
   index.html        Eén lichte SPA (plain HTML/CSS/JS, geen build-stap)
   css/style.css
@@ -69,7 +69,7 @@ public/
     sound.js        Geluidseffecten via WebAudio
     character.js    Cartoon-personages als schaalbare SVG
     net.js          Socket.io-wrapper + reconnect-token (alleen in geheugen)
-    minigames.js    Client-renderers voor alle 11 minigames
+    minigames.js    Client-renderers voor alle 13 minigames
     app.js          Schermrouting, character-creator, lobby, fase-overgangen
 test/               Unit- en integratietests
 render.yaml         Render Blueprint
@@ -118,7 +118,7 @@ Beide extremen krijgen 0, het midden de meeste punten:
   winnaar: dichtst bij het gemiddelde van de koplopers, dan de laagste uitkomst.
 - Bij **< 3 actieve spelers** door disconnects wordt het spel netjes afgebroken.
 
-## De 11 minigames
+## De 13 minigames
 
 | # | Naam | Type | Uitkomst |
 |---|------|------|----------|
@@ -133,6 +133,8 @@ Beide extremen krijgen 0, het midden de meeste punten:
 | 9 | De Blinde Schutter | geheim (30s) | afgelegde afstand (projectiel-fysica) |
 | 10 | Cirkeltrek | geheim (30s) | oppervlakte van je cirkel (server-shoelace) |
 | 11 | De Lift | geheim (30s) | gekozen verdieping (1–20) |
+| 12 | De Toren | realtime | hoogte waarop je stopt (reflex) |
+| 13 | Schatten in de Pot | geheim (30s) | jouw schatting (0–100) |
 
 Geheime-invoer-games hebben een vaste rondetijd van 30s; wie niet inlevert telt
 niet mee die ronde. Realtime-games hebben een veiligheidsnet-timer. Vóór elke
@@ -146,7 +148,7 @@ Eén apparaat kan per lobby maar één keer joinen.
 
 **Af:** alle gevraagde onderdelen — lobby + character-creator, 5-uit-10-selectie
 zonder herhaling, het volledige scoringssysteem met ties/disconnect/tiebreak,
-alle 11 minigames (intro → spel → onthulling), tussenstand, eindpodium met
+alle 13 minigames (intro → spel → onthulling), tussenstand, eindpodium met
 winnaar én verliezer, host-controls + wachtschermen, geluidseffecten,
 mute-knop, reconnect, Nederlandse copy, en de tests. Lokaal draaien en de
 Render-deploy zijn geverifieerd; het complete 3-speler-spelverloop is in de

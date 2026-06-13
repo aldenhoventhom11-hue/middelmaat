@@ -44,6 +44,9 @@ const HAIR_STYLES = ['kort', 'krullen', 'lang', 'staart', 'stekels', 'bob', 'kaa
 const FACES = ['blij', 'neutraal', 'stoer', 'verbaasd'];
 const GENDERS = ['man', 'vrouw'];
 const OUTFITS = ['broek', 'rok', 'jurk'];
+const GLASSES = ['geen', 'rond', 'nerd', 'zonnebril'];
+const BEARDS = ['geen', 'snor', 'sik', 'vol'];
+const ACC_HATS = ['geen', 'pet', 'muts', 'hoge hoed', 'kroon', 'bloem'];
 
 function sanitizeCharacter(c) {
   c = c && typeof c === 'object' ? c : {};
@@ -63,6 +66,9 @@ function sanitizeCharacter(c) {
     bottom: color(c.bottom, '#2b2d42'),
     outfit: pick(c.outfit, OUTFITS, 'broek'),
     face: pick(c.face, FACES, 'blij'),
+    glasses: pick(c.glasses, GLASSES, 'geen'),
+    beard: pick(c.beard, BEARDS, 'geen'),
+    hat: pick(c.hat, ACC_HATS, 'geen'),
   };
 }
 
@@ -163,7 +169,7 @@ io.on('connection', (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on('lobby:start', () => {
+  socket.on('lobby:start', (data) => {
     const room = rooms.getRoom(socket.data.code);
     if (!room) return;
     if (!room.isHost(socket.data.playerId)) return;
@@ -171,6 +177,9 @@ io.on('connection', (socket) => {
     if (room.connectedActivePlayers().length < MIN_PLAYERS) {
       return emitError(socket, 'Je hebt minstens ' + MIN_PLAYERS + ' spelers nodig.');
     }
+    // Host kiest het aantal rondes (3/5/7).
+    const rounds = data && [3, 5, 7].includes(data.rounds) ? data.rounds : 5;
+    room.totalRounds = rounds;
     room.engine = new GameEngine(room, io, minigames);
     room.engine.run().then(() => {
       // Spel klaar: engine blijft staan tot host herstart.
@@ -190,6 +199,19 @@ io.on('connection', (socket) => {
     if (!room || !room.engine) return;
     if (!room.isHost(socket.data.playerId)) return;
     room.engine.forceEnd(socket.data.playerId);
+  });
+
+  // Lobby-chat.
+  socket.on('lobby:chat', (data) => {
+    const room = rooms.getRoom(socket.data.code);
+    if (!room) return;
+    const player = room.players.get(socket.data.playerId);
+    if (!player) return;
+    let text = String((data && data.text) || '').trim().slice(0, 120);
+    if (!text) return;
+    room.chat.push({ name: player.name, text, id: player.id });
+    if (room.chat.length > 30) room.chat.shift();
+    broadcastRoom(room);
   });
 
   // Speler verlaat de lobby ("Terug").

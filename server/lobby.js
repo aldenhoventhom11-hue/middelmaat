@@ -4,7 +4,7 @@
 // het spel duurt. De server is de single source of truth.
 
 const MIN_PLAYERS = 3;
-const MAX_PLAYERS = 10;
+const MAX_PLAYERS = 20;
 
 // Code zonder verwarrende tekens (geen 0/O/1/I).
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -58,6 +58,7 @@ class Room {
     this.podium = null;
     this.roundIndex = -1;
     this.totalRounds = 5;
+    this.chat = []; // laatste lobby-chatberichten
     this.currentGame = null; // { id, title, theme, rules, type }
     this.lastActivity = Date.now();
   }
@@ -93,6 +94,7 @@ class Room {
       mg: this.mg,
       wheel: this.wheel,
       reveal: this.reveal,
+      chat: this.chat,
       podium: this.podium,
       players,
       you: forPlayerId

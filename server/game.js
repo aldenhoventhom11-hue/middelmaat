@@ -111,6 +111,21 @@ class GameEngine {
     if (this._eventHandler) this._eventHandler(playerId, payload);
   }
 
+  // ---- Host force-end: ronde vroegtijdig afronden ----
+  newForce() {
+    return new Promise((resolve) => {
+      this._forceResolve = resolve;
+    });
+  }
+  forceEnd(playerId) {
+    if (!this.room.isHost(playerId)) return;
+    if (this._forceResolve) {
+      const r = this._forceResolve;
+      this._forceResolve = null;
+      r();
+    }
+  }
+
   // ---- Abort ----
   abort(reason) {
     if (this.aborted) return;
@@ -131,6 +146,11 @@ class GameEngine {
       this._continueResolve = null;
       r();
     }
+    if (this._forceResolve) {
+      const r = this._forceResolve;
+      this._forceResolve = null;
+      r();
+    }
   }
 
   // ---- Context voor een minigame ----
@@ -142,6 +162,7 @@ class GameEngine {
       rng: this.rng,
       room: this.room,
       now: () => Date.now(),
+      force: this.newForce(), // resolvet wanneer de host de ronde afrondt
       publish(mgState) {
         self.room.mg = mgState;
         self.broadcast();
@@ -225,23 +246,26 @@ class GameEngine {
         if (this.aborted) return;
 
         // --- Uitkomsten samenstellen + scoren ---
+        // Alleen wie écht heeft ingeleverd (en verbonden is) telt mee. Wie niet
+        // inleverde of disconnect: 0 punten, telt NIET als extreem.
         const outcomes = result.outcomes || {};
-        const entries = active.map((p) => {
-          const acted = Object.prototype.hasOwnProperty.call(outcomes, p.id);
-          const disconnected = !p.connected;
-          let value = acted ? outcomes[p.id] : WORST;
-          if (disconnected) value = WORST;
-          return { id: p.id, value, disconnected: disconnected || !acted };
-        });
-
+        const hasOutcome = (p) =>
+          p.connected && Object.prototype.hasOwnProperty.call(outcomes, p.id);
+        const scoredPlayers = active.filter(hasOutcome);
         const roundScores = scoreRound(
-          entries.map((e) => ({ id: e.id, value: e.value })),
+          scoredPlayers.map((p) => ({ id: p.id, value: outcomes[p.id] })),
           game.scoring || 'symmetric'
         );
 
-        for (const e of entries) {
-          const p = room.players.get(e.id);
-          if (p) p.total += roundScores[e.id] || 0;
+        const entries = active.map((p) => ({
+          id: p.id,
+          scored: hasOutcome(p),
+          value: hasOutcome(p) ? outcomes[p.id] : null,
+          disconnected: !p.connected,
+        }));
+
+        for (const p of active) {
+          p.total += roundScores[p.id] || 0;
         }
 
         // --- Onthulling ---
@@ -268,14 +292,19 @@ class GameEngine {
     const extra = (result && result.reveal) || {};
     const rows = entries.map((e) => {
       const p = room.players.get(e.id);
-      const ex = extra[e.id] || {};
+      const ex = e.scored ? extra[e.id] || {} : {};
       return {
         id: e.id,
         name: p ? p.name : '?',
         character: p ? p.character : null,
+        scored: e.scored,
         disconnected: e.disconnected,
-        value: e.disconnected ? null : e.value,
-        display: e.disconnected ? 'verbinding verbroken' : ex.display,
+        value: e.scored ? e.value : null,
+        display: e.scored
+          ? ex.display
+          : e.disconnected
+          ? 'verbinding verbroken'
+          : 'niet ingeleverd',
         roundScore: roundScores[e.id] || 0,
         total: p ? p.total : 0,
         ...ex,

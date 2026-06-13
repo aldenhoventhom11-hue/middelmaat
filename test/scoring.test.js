@@ -25,25 +25,25 @@ test('symmetric: ongesorteerde input geeft hetzelfde resultaat', () => {
   assert.deepStrictEqual(scores([30, 10, 50, 40, 20]), [2, 0, 0, 1, 1]);
 });
 
-test('symmetric: tie krijgt gemiddelde van de posities', () => {
-  // Twee laagsten gelijk: posities 0 en 1 -> raw 0 en 1 -> gemiddeld 0.5 elk.
+test('symmetric: tie krijgt het hoogste punt van de posities (heel getal)', () => {
+  // Twee laagsten gelijk: posities 0 en 1 -> raw 0 en 1 -> beiden 1 (hoogste).
   // 5 spelers, posities raw = [0,1,2,1,0].
-  assert.deepStrictEqual(scores([10, 10, 30, 40, 50]), [0.5, 0.5, 2, 1, 0]);
+  assert.deepStrictEqual(scores([10, 10, 30, 40, 50]), [1, 1, 2, 1, 0]);
 });
 
-test('symmetric: alle gelijk -> iedereen hetzelfde gemiddelde', () => {
-  // 4 spelers raw [0,1,1,0] -> som 2 / 4 = 0.5 elk.
-  assert.deepStrictEqual(scores([7, 7, 7, 7]), [0.5, 0.5, 0.5, 0.5]);
+test('symmetric: alle gelijk -> iedereen het hoogste punt', () => {
+  // 4 spelers raw [0,1,1,0] -> hoogste = 1 -> iedereen 1.
+  assert.deepStrictEqual(scores([7, 7, 7, 7]), [1, 1, 1, 1]);
 });
 
-test('symmetric: drie gelijk in het midden', () => {
-  // 5 spelers, middelste 3 gelijk: posities 1,2,3 raw [1,2,1] -> gem 4/3.
-  const r = scores([10, 20, 20, 20, 50]);
-  assert.strictEqual(r[0], 0);
-  assert.ok(Math.abs(r[1] - 4 / 3) < 1e-9);
-  assert.ok(Math.abs(r[2] - 4 / 3) < 1e-9);
-  assert.ok(Math.abs(r[3] - 4 / 3) < 1e-9);
-  assert.strictEqual(r[4], 0);
+test('symmetric: drie gelijk in het midden krijgen het hoogste (2)', () => {
+  // 5 spelers, middelste 3 gelijk: posities 1,2,3 raw [1,2,1] -> hoogste 2.
+  assert.deepStrictEqual(scores([10, 20, 20, 20, 50]), [0, 2, 2, 2, 0]);
+});
+
+test('scores zijn altijd hele getallen', () => {
+  [scores([10, 10, 30, 40, 50]), scores([7, 7, 7, 7]), scores([10, 20, 20, 20, 50])]
+    .forEach((r) => r.forEach((v) => assert.ok(Number.isInteger(v), v + ' is heel')));
 });
 
 test('closest (minigame 5): dichtstbij wint, versten krijgen 0', () => {
@@ -53,14 +53,10 @@ test('closest (minigame 5): dichtstbij wint, versten krijgen 0', () => {
   assert.deepStrictEqual(scores([1, 2, 3, 4, 5], 'closest'), [3, 2, 1, 0, 0]);
 });
 
-test('closest: tie op de dichtstbijzijnde afstand deelt de punten', () => {
-  // 5 spelers, twee dichtstbij gelijk: posities 0,1 raw [3,2] -> 2.5 elk.
+test('closest: tie op de dichtstbijzijnde afstand -> hoogste punt', () => {
+  // 5 spelers, twee dichtstbij gelijk: posities 0,1 raw [3,2] -> beiden 3.
   const r = scores([5, 5, 10, 20, 30], 'closest');
-  assert.strictEqual(r[0], 2.5);
-  assert.strictEqual(r[1], 2.5);
-  assert.strictEqual(r[2], 1);
-  assert.strictEqual(r[3], 0);
-  assert.strictEqual(r[4], 0);
+  assert.deepStrictEqual(r, [3, 3, 1, 0, 0]);
 });
 
 test('randgevallen: 0 en 1 speler', () => {

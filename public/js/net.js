@@ -3,6 +3,18 @@
 (function () {
   const socket = io({ transports: ['websocket', 'polling'] });
 
+  // Persistent apparaat-token (alleen voor 'één join per apparaat', geen game-state).
+  let deviceId;
+  try {
+    deviceId = localStorage.getItem('mm_device');
+    if (!deviceId) {
+      deviceId = 'd-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('mm_device', deviceId);
+    }
+  } catch (e) {
+    deviceId = 'd-' + Math.random().toString(36).slice(2);
+  }
+
   let code = null;
   let playerId = null;
   let onState = function () {};
@@ -28,7 +40,7 @@
 
   window.Net = {
     async create(name, character) {
-      const r = await emit('lobby:create', { name, character });
+      const r = await emit('lobby:create', { name, character, deviceId });
       if (r.ok) {
         code = r.code;
         playerId = r.playerId;
@@ -36,7 +48,7 @@
       return r;
     },
     async join(c, name, character) {
-      const r = await emit('lobby:join', { code: c, name, character });
+      const r = await emit('lobby:join', { code: c, name, character, deviceId });
       if (r.ok) {
         code = r.code;
         playerId = r.playerId;
@@ -48,6 +60,14 @@
     },
     next() {
       socket.emit('game:next');
+    },
+    force() {
+      socket.emit('game:force');
+    },
+    leave() {
+      socket.emit('lobby:leave');
+      code = null;
+      playerId = null;
     },
     restart() {
       socket.emit('game:restart');

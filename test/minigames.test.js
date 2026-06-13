@@ -48,6 +48,11 @@ const scenarios = {
     for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: i + 1 });
     await h.flush();
   },
+  async lift(h, n) {
+    await h.flush();
+    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: Math.min(20, i + 1) });
+    await h.flush();
+  },
   async verdeelheers(h, n) {
     await h.flush();
     for (let i = 0; i < n; i++) {

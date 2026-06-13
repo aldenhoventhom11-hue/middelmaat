@@ -15,7 +15,7 @@ async function waitUntil(ctx, isDone, { pollMs = 120, maxMs = 60000, onTick } = 
       }
     });
   });
-  await Promise.race([polled, ctx.sleep(maxMs)]);
+  await Promise.race([polled, ctx.sleep(maxMs), ctx.force]);
 }
 
 // Korte aftelling (3-2-1) voor realtime games.

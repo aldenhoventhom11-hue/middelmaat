@@ -42,6 +42,7 @@ function makeHarness(n, seed = 12345) {
     ids: players.map((p) => p.id),
     rng: makeRng(seed),
     room,
+    force: new Promise(() => {}), // host force-end; in tests nooit getriggerd
     now: () => clock,
     publish(s) {
       room.mg = s;

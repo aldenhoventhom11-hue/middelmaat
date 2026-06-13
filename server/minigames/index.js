@@ -12,6 +12,7 @@ const modules = [
   require('./pizzapunt'), // 8
   require('./blindeschutter'), // 9
   require('./cirkeltrek'), // 10
+  require('./lift'), // 11
 ];
 
 // Emoji per minigame (voor het rad en de intro-kaart).
@@ -26,6 +27,7 @@ const EMOJI = {
   pizzapunt: '🍕',
   blindeschutter: '🎯',
   cirkeltrek: '⭕',
+  lift: '🛗',
 };
 
 const minigames = new Map();

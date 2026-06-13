@@ -47,7 +47,7 @@ async function runSecret(ctx, opts) {
     if (Object.keys(submissions).length >= ctx.ids.length) resolveEarly();
   });
 
-  await Promise.race([ctx.sleep(duration), earlyDone]);
+  await Promise.race([ctx.sleep(duration), earlyDone, ctx.force]);
   off();
   if (ctx.isAborted()) return { outcomes: {} };
 

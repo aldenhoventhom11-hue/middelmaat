@@ -19,6 +19,7 @@
   let curMg = null;
   let podiumDone = false;
   let lastReveal = null;
+  let introDemoStop = null; // stopt de lopende intro-demo-animatie
 
   // ---- UI-helpers ----
   function showScreen(name) {
@@ -75,15 +76,45 @@
   function buildCreatorControls() {
     const wrap = $('creator-controls');
     wrap.innerHTML = '';
-    // Kleur-swatches
+    wrap.appendChild(optRow('Man / Vrouw', 'gender', Char.GENDERS));
     wrap.appendChild(swatchRow('Huidskleur', 'skin', Char.SKINS));
     wrap.appendChild(optRow('Haarstijl', 'hair', Char.HAIR_STYLES));
     wrap.appendChild(swatchRow('Haarkleur', 'hairColor', Char.HAIR_COLORS, true));
-    wrap.appendChild(optRow('Lengte', 'height', Char.HEIGHTS));
-    wrap.appendChild(optRow('Postuur', 'build', Char.BUILDS));
+    wrap.appendChild(sliderRow('Lengte', 'height', '🧍 klein', '🦒 lang'));
+    wrap.appendChild(sliderRow('Postuur', 'build', '🪶 dun', '🧸 stevig'));
     wrap.appendChild(optRow('Gezicht', 'face', Char.FACES));
     wrap.appendChild(swatchRow('Shirt', 'top', Char.COLORS));
-    wrap.appendChild(swatchRow('Broek', 'bottom', ['#2b2d42', '#3a3a44', '#5b3a1a', '#1b3a5b', '#7a1f3d', '#2d6a4f', '#4a4e69', '#1a1a1a']));
+    wrap.appendChild(optRow('Kleding', 'outfit', Char.OUTFITS));
+    wrap.appendChild(swatchRow('Broek/rok-kleur', 'bottom', Char.PANTS));
+  }
+  function sliderRow(labelTxt, key, lo, hi) {
+    const row = document.createElement('div');
+    row.className = 'ctrl-row';
+    row.appendChild(label(labelTxt));
+    const wrap = document.createElement('div');
+    wrap.className = 'slider-row';
+    const loEl = document.createElement('span');
+    loEl.className = 'slider-end';
+    loEl.textContent = lo;
+    const hiEl = document.createElement('span');
+    hiEl.className = 'slider-end';
+    hiEl.textContent = hi;
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = '0';
+    range.max = '100';
+    range.value = String(Math.round((typeof character[key] === 'number' ? character[key] : 0.5) * 100));
+    range.className = 'slider';
+    range.addEventListener('input', () => {
+      character[key] = Number(range.value) / 100;
+      drawPreview();
+    });
+    range.addEventListener('change', () => Sound.play('button'));
+    wrap.appendChild(loEl);
+    wrap.appendChild(range);
+    wrap.appendChild(hiEl);
+    row.appendChild(wrap);
+    return row;
   }
   function label(txt) {
     const l = document.createElement('div');
@@ -181,6 +212,11 @@
       $('round-pill').textContent = '🏁 Klaar';
     }
 
+    // Intro-demo stoppen zodra we de intro verlaten.
+    if (phase !== 'intro' && introDemoStop) {
+      introDemoStop();
+      introDemoStop = null;
+    }
     // Minigame loskoppelen als we niet (meer) spelen
     if (phase !== 'playing' && curMg) {
       if (curMg.unmount) curMg.unmount();
@@ -227,6 +263,15 @@
     } else {
       ctrl.appendChild(waitNote('Wachten tot de host start…'));
     }
+    const back = document.createElement('button');
+    back.className = 'btn full';
+    back.textContent = '← Terug';
+    back.onclick = () => {
+      Sound.play('button');
+      Net.leave();
+      showScreen('home');
+    };
+    ctrl.appendChild(back);
   }
 
   function playerCard(p, youId) {
@@ -287,6 +332,19 @@
       ? 'Gelijkspel! ' + ((state.mg && state.mg.leaderNames) || []).join(' & ') + ' strijden om de winst.'
       : g.theme || '';
     $('intro-rules').textContent = g.rules || '';
+    // Auto-demo van de minigame.
+    if (introDemoStop) {
+      introDemoStop();
+      introDemoStop = null;
+    }
+    const demoBox = $('intro-demo');
+    demoBox.innerHTML = '';
+    const mod = !tb && g.id ? MG[g.id] : null;
+    if (mod && mod.demo) {
+      try {
+        introDemoStop = mod.demo(demoBox);
+      } catch (e) {}
+    }
     const ctrl = $('intro-controls');
     ctrl.innerHTML = '';
     if (isHost) {
@@ -336,6 +394,12 @@
         'transform:translate(-50%,-50%) rotate(' + ang + 'deg) translateY(-' + R + 'px);';
       span.textContent = o.emoji;
       disc.appendChild(span);
+      // Scheidingslijn aan het begin van elk segment.
+      const line = document.createElement('span');
+      line.style.cssText =
+        'position:absolute;left:50%;top:50%;width:3px;height:50%;background:rgba(255,255,255,0.8);' +
+        'transform-origin:top center;transform:translateX(-50%) rotate(' + (i * seg + 180) + 'deg);';
+      disc.appendChild(line);
     });
 
     const selIndex = Math.max(0, opts.findIndex((o) => o.id === wheel.selectedId));
@@ -388,6 +452,27 @@
       }
     }
     if (curMg && curMg.update) curMg.update(mg);
+
+    // Host kan de ronde altijd vroegtijdig afronden.
+    const hc = $('play-host-controls');
+    if (isHost) {
+      if (!hc.dataset.built) {
+        hc.innerHTML = '';
+        const b = document.createElement('button');
+        b.className = 'btn full';
+        b.style.opacity = '0.92';
+        b.textContent = '⏭ Ronde nu afronden';
+        b.onclick = () => {
+          Sound.play('button');
+          Net.force();
+        };
+        hc.appendChild(b);
+        hc.dataset.built = '1';
+      }
+    } else {
+      hc.innerHTML = '';
+      delete hc.dataset.built;
+    }
   }
 
   // ---- Onthulling ----
@@ -521,7 +606,7 @@
       row.appendChild(h('span', 'medal', i === 0 ? '👑' : i + 1 + '.'));
       row.appendChild(Char.el(r.character || {}));
       row.appendChild(h('span', 'rn', r.name));
-      row.appendChild(h('span', 'rp', String(Math.round(r.total * 10) / 10)));
+      row.appendChild(h('span', 'rp', String(Math.round(r.total))));
       wrap.appendChild(row);
     });
     return wrap;
@@ -564,7 +649,7 @@
       stand.className = 'stand';
       stand.textContent = cls[i] === 'p1' ? '1' : cls[i] === 'p2' ? '2' : '3';
       spot.appendChild(stand);
-      spot.appendChild(h('div', 'pt', Math.round(p.total * 10) / 10 + ' pt'));
+      spot.appendChild(h('div', 'pt', Math.round(p.total) + ' pt'));
       stage.appendChild(spot);
     });
     body.appendChild(stage);
@@ -580,7 +665,7 @@
         row.appendChild(h('span', 'medal', i + 4 + '.'));
         row.appendChild(Char.el(p.character));
         row.appendChild(h('span', 'rn', p.name));
-        row.appendChild(h('span', 'rp', Math.round(p.total * 10) / 10 + ''));
+        row.appendChild(h('span', 'rp', Math.round(p.total) + ''));
         rest.appendChild(row);
       });
       body.appendChild(rest);
@@ -631,7 +716,7 @@
         row.appendChild(h('span', 'medal', i === 0 ? '👑' : i + 1 + '.'));
         row.appendChild(Char.el(r.character || {}));
         row.appendChild(h('span', 'rn', r.name));
-        row.appendChild(h('span', 'rp', Math.round(r.total * 10) / 10 + ''));
+        row.appendChild(h('span', 'rp', Math.round(r.total) + ''));
         list.appendChild(row);
       });
     }

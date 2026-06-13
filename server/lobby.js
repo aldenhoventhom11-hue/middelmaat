@@ -25,6 +25,7 @@ class Player {
   constructor(id, name, character) {
     this.id = id; // stabiel speler-id (reconnect-token), los van socket-id
     this.socketId = null;
+    this.deviceId = null; // apparaat-token: 1 join per apparaat per lobby
     this.name = name;
     this.character = character; // { shape, color, eyes, mouth, hat }
     this.connected = true;

@@ -36,24 +36,32 @@ function sanitizeName(name) {
   return s.length ? s : 'Speler';
 }
 
+function sanitizeDevice(d) {
+  return typeof d === 'string' && d.length ? d.slice(0, 64) : null;
+}
+
 const HAIR_STYLES = ['kort', 'krullen', 'lang', 'staart', 'stekels', 'bob', 'kaal'];
-const BUILDS = ['dun', 'gemiddeld', 'stevig'];
-const HEIGHTS = ['klein', 'gemiddeld', 'lang'];
 const FACES = ['blij', 'neutraal', 'stoer', 'verbaasd'];
+const GENDERS = ['man', 'vrouw'];
+const OUTFITS = ['broek', 'rok', 'jurk'];
 
 function sanitizeCharacter(c) {
   c = c && typeof c === 'object' ? c : {};
   const pick = (val, list, def) => (list.includes(val) ? val : def);
   const color = (val, def) =>
     typeof val === 'string' && /^#[0-9a-fA-F]{6}$/.test(val) ? val : def;
+  const num01 = (val, def) =>
+    typeof val === 'number' && isFinite(val) ? Math.max(0, Math.min(1, val)) : def;
   return {
+    gender: pick(c.gender, GENDERS, 'man'),
     skin: color(c.skin, '#f3c89b'),
     hair: pick(c.hair, HAIR_STYLES, 'kort'),
     hairColor: color(c.hairColor, '#5a3210'),
-    build: pick(c.build, BUILDS, 'gemiddeld'),
-    height: pick(c.height, HEIGHTS, 'gemiddeld'),
+    height: num01(c.height, 0.5),
+    build: num01(c.build, 0.5),
     top: color(c.top, '#5b8cff'),
     bottom: color(c.bottom, '#2b2d42'),
+    outfit: pick(c.outfit, OUTFITS, 'broek'),
     face: pick(c.face, FACES, 'blij'),
   };
 }
@@ -81,9 +89,11 @@ io.on('connection', (socket) => {
     try {
       const name = sanitizeName(data && data.name);
       const character = sanitizeCharacter(data && data.character);
+      const deviceId = sanitizeDevice(data && data.deviceId);
       const room = rooms.createRoom();
       const player = new Player(genPlayerId(), name, character);
       player.socketId = socket.id;
+      player.deviceId = deviceId;
       room.players.set(player.id, player);
       room.hostId = player.id;
       socket.data.code = room.code;
@@ -107,10 +117,21 @@ io.on('connection', (socket) => {
       if (room.players.size >= MAX_PLAYERS) {
         return reply({ ok: false, message: 'Lobby is vol (max ' + MAX_PLAYERS + ').' });
       }
+      const deviceId = sanitizeDevice(data && data.deviceId);
+      // Eén keer joinen per apparaat per lobby.
+      if (deviceId) {
+        const dup = [...room.players.values()].find(
+          (p) => p.deviceId === deviceId && p.connected
+        );
+        if (dup) {
+          return reply({ ok: false, message: 'Dit apparaat doet al mee in deze lobby.' });
+        }
+      }
       const name = sanitizeName(data && data.name);
       const character = sanitizeCharacter(data && data.character);
       const player = new Player(genPlayerId(), name, character);
       player.socketId = socket.id;
+      player.deviceId = deviceId;
       // Mid-game gejoind? Dan wacht je tot het volgende spel.
       player.waiting = room.phase !== 'lobby';
       room.players.set(player.id, player);
@@ -161,6 +182,39 @@ io.on('connection', (socket) => {
     if (!room || !room.engine) return;
     if (!room.isHost(socket.data.playerId)) return;
     room.engine.hostContinue(socket.data.playerId);
+  });
+
+  // Host rondt de lopende minigame vroegtijdig af.
+  socket.on('game:force', () => {
+    const room = rooms.getRoom(socket.data.code);
+    if (!room || !room.engine) return;
+    if (!room.isHost(socket.data.playerId)) return;
+    room.engine.forceEnd(socket.data.playerId);
+  });
+
+  // Speler verlaat de lobby ("Terug").
+  socket.on('lobby:leave', () => {
+    const room = rooms.getRoom(socket.data.code);
+    const pid = socket.data.playerId;
+    socket.data.code = null;
+    socket.data.playerId = null;
+    if (!room) return;
+    const player = room.players.get(pid);
+    if (!player) return;
+    const wasHost = room.isHost(player.id);
+    room.players.delete(player.id);
+    socket.leave(room.code);
+    const anyConnected = [...room.players.values()].some((p) => p.connected);
+    if (!anyConnected) {
+      rooms.removeRoom(room.code);
+      return;
+    }
+    if (wasHost) room.reassignHost();
+    if (room.engine && room.phase !== 'lobby' &&
+        room.connectedActivePlayers().length < MIN_PLAYERS) {
+      room.engine.endAbort('Te weinig spelers — het spel is gestopt.');
+    }
+    broadcastRoom(room);
   });
 
   socket.on('game:restart', () => {

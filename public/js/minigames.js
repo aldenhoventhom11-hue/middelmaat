@@ -216,6 +216,45 @@
     },
   });
 
+  // De Lift — verdieping kiezen
+  function liftSvg(value, max) {
+    const W = 70,
+      H = 120,
+      shaftX = 22,
+      shaftW = 30,
+      top = 6,
+      bot = H - 6;
+    const t = (value - 1) / (max - 1);
+    const carY = bot - 18 - t * (bot - top - 22);
+    let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+    s += `<rect x="14" y="0" width="46" height="${H}" rx="6" fill="#cdd6e0" stroke="#9aa6b3" stroke-width="2"/>`;
+    // verdiepingslijnen
+    for (let i = 0; i < 6; i++) {
+      const y = top + 4 + (i * (bot - top - 8)) / 5;
+      s += `<line x1="16" y1="${y}" x2="58" y2="${y}" stroke="#b3bcc7" stroke-width="1"/>`;
+    }
+    // schacht
+    s += `<rect x="${shaftX}" y="${top}" width="${shaftW}" height="${bot - top}" fill="#eef2f6" stroke="#9aa6b3" stroke-width="1.5"/>`;
+    // liftcabine
+    s += `<rect x="${shaftX + 2}" y="${carY}" width="${shaftW - 4}" height="18" rx="3" fill="#ffd23f" stroke="#b9882f" stroke-width="2"/>`;
+    s += `<line x1="${shaftX + shaftW / 2}" y1="${carY}" x2="${shaftX + shaftW / 2}" y2="${carY + 18}" stroke="#b9882f" stroke-width="1"/>`;
+    s += `<text x="${shaftX + shaftW / 2}" y="${carY + 13}" text-anchor="middle" font-size="10" font-weight="900" fill="#7a5a14">${value}</text>`;
+    return s + '</svg>';
+  }
+  MG.lift = numberGame({
+    title: 'De Lift',
+    emoji: '🛗',
+    instruction: 'Op welke verdieping stap je uit (1–20)? De gemiddelde verdieping wint.',
+    min: 1,
+    max: 20,
+    start: 10,
+    visual(value, cfg) {
+      const d = document.createElement('div');
+      d.innerHTML = liftSvg(value, cfg.max);
+      return d;
+    },
+  });
+
   // =========================================================
   // Verdeel & Heers — strafpunten verdelen
   // =========================================================
@@ -610,31 +649,101 @@
   // =========================================================
   MG.blindeschutter = (function () {
     const st = {};
+    const PX = 62; // pivot x
     function draw() {
       const c = st.ctx2d,
         W = st.canvas.width,
         H = st.canvas.height;
+      const PY = H - 48;
       c.fillStyle = '#05030f';
       c.fillRect(0, 0, W, H);
-      // klif + katapult
-      c.fillStyle = '#3b2f5e';
-      c.fillRect(0, H - 30, 70, 30);
-      c.font = '34px serif';
-      c.fillText('🪨', 18, H - 6);
-      // aim-pijl
-      const cx = 50,
-        cy = H - 34;
+      // spotlight op de katapult
+      const g = c.createRadialGradient(PX, PY - 18, 8, PX, PY - 18, 170);
+      g.addColorStop(0, 'rgba(110,70,180,0.5)');
+      g.addColorStop(1, 'rgba(5,3,15,0)');
+      c.fillStyle = g;
+      c.fillRect(0, 0, W, H);
       const rad = (st.angle * Math.PI) / 180;
-      const len = 20 + (st.power / 100) * 90;
-      c.strokeStyle = '#ffd23f';
-      c.lineWidth = 4;
+      // klif
+      c.fillStyle = '#2a2440';
       c.beginPath();
-      c.moveTo(cx, cy);
-      c.lineTo(cx + Math.cos(rad) * len, cy - Math.sin(rad) * len);
+      c.moveTo(0, H);
+      c.lineTo(0, H - 24);
+      c.lineTo(118, H - 24);
+      c.lineTo(100, H);
+      c.closePath();
+      c.fill();
+      c.fillStyle = '#3a3458';
+      c.fillRect(0, H - 28, 116, 6);
+      // baan-preview (gestippeld)
+      const R = (st.power / 100) * (W - PX - 26);
+      c.setLineDash([4, 7]);
+      c.strokeStyle = 'rgba(255,210,63,0.4)';
+      c.lineWidth = 2;
+      c.beginPath();
+      for (let t = 0; t <= 1; t += 0.04) {
+        const x = PX + R * t;
+        const peak = Math.min(PY - 12, Math.sin(rad) * R * 0.95);
+        const y = PY - 4 * peak * (t - t * t);
+        t === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
       c.stroke();
+      c.setLineDash([]);
+      // A-frame (twee houten poten)
+      c.strokeStyle = '#8a5a2b';
+      c.lineWidth = 7;
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(PX - 16, H - 26);
+      c.lineTo(PX, PY);
+      c.moveTo(PX + 16, H - 26);
+      c.lineTo(PX, PY);
+      c.stroke();
+      // arm
+      const armLen = 46;
+      const ax = PX + Math.cos(rad) * armLen;
+      const ay = PY - Math.sin(rad) * armLen;
+      c.strokeStyle = '#b9762f';
+      c.lineWidth = 8;
+      c.beginPath();
+      c.moveTo(PX, PY);
+      c.lineTo(ax, ay);
+      c.stroke();
+      // elastiek (strakker bij meer kracht -> roder)
+      const band = 'rgb(' + Math.round(180 + st.power * 0.6) + ',60,60)';
+      c.strokeStyle = band;
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(PX - 16, PY - 4);
+      c.lineTo(ax, ay);
+      c.moveTo(PX + 16, PY - 4);
+      c.lineTo(ax, ay);
+      c.stroke();
+      // projectiel in de pouch (met halo, zonder dure shadowBlur)
+      c.fillStyle = 'rgba(255,210,63,0.3)';
+      c.beginPath();
+      c.arc(ax, ay, 13, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ffd23f';
+      c.beginPath();
+      c.arc(ax, ay, 7, 0, Math.PI * 2);
+      c.fill();
+      // pivot-bout
+      c.fillStyle = '#5a3210';
+      c.beginPath();
+      c.arc(PX, PY, 4, 0, Math.PI * 2);
+      c.fill();
+      // krachtmeter rechts
+      c.fillStyle = 'rgba(255,255,255,0.15)';
+      c.fillRect(W - 22, 16, 12, H - 60);
+      c.fillStyle = '#ff6b6b';
+      const ph = ((H - 60) * st.power) / 100;
+      c.fillRect(W - 22, 16 + (H - 60 - ph), 12, ph);
+      // tekst
       c.fillStyle = '#fff';
-      c.font = '14px sans-serif';
-      c.fillText('hoek ' + Math.round(st.angle) + '°  kracht ' + Math.round(st.power), 10, 20);
+      c.font = 'bold 14px sans-serif';
+      c.fillText('hoek ' + Math.round(st.angle) + '°', 10, 22);
+      c.fillText('kracht ' + Math.round(st.power), 10, 40);
     }
     return {
       mount(root, ctx) {
@@ -657,14 +766,13 @@
         st.ctx2d = st.canvas.getContext('2d');
         root.appendChild(st.canvas);
 
-        const origin = { x: 50 };
         const onDrag = (e) => {
           if (st.fired) return;
           const r = st.canvas.getBoundingClientRect();
           const sx = ((e.clientX - r.left) / r.width) * st.canvas.width;
           const sy = ((e.clientY - r.top) / r.height) * st.canvas.height;
-          const dx = sx - origin.x;
-          const dy = st.canvas.height - 34 - sy;
+          const dx = sx - PX;
+          const dy = st.canvas.height - 48 - sy;
           st.angle = Math.max(5, Math.min(85, (Math.atan2(Math.max(1, dy), Math.max(1, dx)) * 180) / Math.PI));
           st.power = Math.max(1, Math.min(100, Math.hypot(dx, dy) / 1.6));
           draw();
@@ -886,6 +994,96 @@
     wrap.innerHTML = '🎈 Hoogste inzet: ' + maxP + ' slagen — <b>KNAL!</b> 💥';
     return wrap;
   };
+
+  // =========================================================
+  // Demo's bij de uitleg: korte loop-animatie die laat zien hoe het werkt.
+  // =========================================================
+  function loopDemo(box, framesFn, ms) {
+    let i = 0;
+    const tick = () => {
+      box.innerHTML = framesFn(i);
+      i++;
+    };
+    tick();
+    const iv = setInterval(tick, ms || 450);
+    return () => clearInterval(iv);
+  }
+  const scene = (inner, bg) =>
+    '<div class="demo-scene"' + (bg ? ' style="background:' + bg + '"' : '') + '>' + inner + '</div>';
+  const cap = (t) => '<div class="demo-cap">' + t + '</div>';
+
+  const DEMOS = {
+    berenrace: (b) =>
+      loopDemo(b, (i) => {
+        const p = i % 8, bx = 4 + Math.min(p, 5) * 13, hid = p >= 6;
+        return (
+          scene(
+            '<span style="position:absolute;bottom:10px;left:' + bx + '%;font-size:30px">🐻</span>' +
+              '<span style="position:absolute;bottom:10px;right:10%;font-size:28px">' + (hid ? '🌳' : '🏃') + '</span>',
+            'linear-gradient(#bbf7d0,#86efac)'
+          ) + cap(hid ? '…net op tijd verstopt! 🤫' : 'Niet te vroeg, niet te laat!')
+        );
+      }, 430),
+    doolhof: (b) =>
+      loopDemo(b, (i) => {
+        const p = i % 5;
+        let cells = '';
+        for (let k = 0; k < 5; k++) cells += '<span style="font-size:24px">' + (k === p ? '🙂' : k === 4 ? '🏁' : '⬜') + '</span>';
+        return scene(cells) + cap('Gemiddelde tijd wint');
+      }, 420),
+    ballon: (b) =>
+      loopDemo(b, (i) => {
+        const p = i % 10;
+        if (p >= 8) return scene('<div style="font-size:54px">💥</div>') + cap('Te veel = knal!');
+        return scene(balloonSvg(3 + p * 2, 20, '#ff5d5d')) + cap('Pomp je deel… niet te veel');
+      }, 360),
+    verdeelheers: (b) =>
+      loopDemo(b, (i) => {
+        const a = (i % 5) + 1;
+        return scene('<span style="font-size:30px">😈 ➡️ ' + '⭐'.repeat(a) + '</span>') + cap('Verdeel 5 strafpunten');
+      }, 500),
+    gemiddeldgetal: (b) =>
+      loopDemo(b, (i) => {
+        const guess = 16 + (i % 7) * 10;
+        return (
+          scene(
+            '<div style="position:relative;width:88%;height:22px;background:#fff;border-radius:8px">' +
+              '<div style="position:absolute;top:-7px;bottom:-7px;left:50%;width:3px;background:#ef4444"></div>' +
+              '<div style="position:absolute;top:50%;left:' + guess + '%;transform:translate(-50%,-50%);font-size:18px">🔵</div></div>'
+          ) + cap('Kom dicht bij het gemiddelde (rood)')
+        );
+      }, 430),
+    schermstaren: (b) =>
+      loopDemo(b, (i) => {
+        const down = i % 2 === 0;
+        return scene('<div style="font-size:46px">' + (down ? '👇' : '✋') + '</div>', 'radial-gradient(circle,#4c1d95,#1e1b4b)') +
+          cap(down ? 'Houd vast…' : 'Laat los op gevoel!');
+      }, 700),
+    tikkampioen: (b) =>
+      loopDemo(b, (i) => {
+        const n = i % 16;
+        return scene('<div style="font-size:38px">👆</div><div style="font-size:30px;font-weight:900;color:#ffd23f">' + n + '</div>') +
+          cap('Doseer je tempo');
+      }, 250),
+    pizzapunt: (b) =>
+      loopDemo(b, (i) => scene(pizzaSvg(i % 9, 12)) + cap('Niet te gulzig, niet te karig'), 480),
+    blindeschutter: (b) =>
+      loopDemo(b, (i) => {
+        const t = (i % 11) / 10, x = 12 + t * 66, y = 66 - Math.sin(Math.PI * t) * 48;
+        return scene(
+          '<span style="position:absolute;left:6%;bottom:10px;font-size:24px">🪨</span>' +
+            '<span style="position:absolute;left:' + x + '%;top:' + y + '%;font-size:16px">🟡</span>',
+          '#05030f'
+        ) + cap('Mik op de gemiddelde afstand');
+      }, 130),
+    cirkeltrek: (b) =>
+      loopDemo(b, (i) => scene('<div style="font-size:' + (26 + (i % 6) * 8) + 'px">⭕</div>') + cap('Niet de grootste of kleinste'), 320),
+    lift: (b) =>
+      loopDemo(b, (i) => scene(liftSvg(1 + (i % 5) * 4, 20)) + cap('Stap uit op de gemiddelde verdieping'), 600),
+  };
+  Object.keys(DEMOS).forEach((k) => {
+    if (MG[k]) MG[k].demo = DEMOS[k];
+  });
 
   window.MG = MG;
 })();

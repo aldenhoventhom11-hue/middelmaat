@@ -25,9 +25,9 @@
  *       4 spelers -> [2,1,0,0]
  *       5 spelers -> [3,2,1,0,0]
  *
- * Ties (gelijke uitkomstwaarden) krijgen het gemiddelde van de punten die hun
- * gezamenlijke posities zouden opleveren. Daardoor is de uitslag deterministisch
- * en onafhankelijk van de toevallige sorteervolgorde.
+ * Ties (gelijke uitkomstwaarden) krijgen allemaal het HOOGSTE hele punt van hun
+ * gezamenlijke posities (gul, en altijd een heel getal). Daardoor is de uitslag
+ * deterministisch en onafhankelijk van de toevallige sorteervolgorde.
  */
 
 function rawSymmetric(i, n) {
@@ -64,16 +64,16 @@ function scoreRound(entries, model = 'symmetric') {
   // Voorlopige punten per positie.
   const rawScores = sorted.map((_, i) => rawFn(i, n));
 
-  // Groepeer gelijke uitkomstwaarden en geef ze het gemiddelde van hun posities.
+  // Groepeer gelijke uitkomstwaarden en geef ze allemaal het HOOGSTE punt van hun
+  // gezamenlijke posities (gul; blijft een heel getal).
   let i = 0;
   while (i < n) {
     let j = i;
     while (j + 1 < n && sorted[j + 1].value === sorted[i].value) j++;
     if (j > i) {
-      let sum = 0;
-      for (let k = i; k <= j; k++) sum += rawScores[k];
-      const avg = sum / (j - i + 1);
-      for (let k = i; k <= j; k++) rawScores[k] = avg;
+      let best = rawScores[i];
+      for (let k = i; k <= j; k++) best = Math.max(best, rawScores[k]);
+      for (let k = i; k <= j; k++) rawScores[k] = best;
     }
     i = j + 1;
   }

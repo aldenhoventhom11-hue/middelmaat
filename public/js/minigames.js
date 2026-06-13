@@ -1,0 +1,789 @@
+/* Client-side renderers voor de 10 minigames. Elk registreert zich in MG[kind]
+   met mount/update/unmount. Optioneel een revealVisual() voor de onthulling.
+   De server blijft autoritair: de client toont en stuurt alleen input. */
+(function () {
+  const MG = {};
+
+  // ---- DOM-helpers ----
+  function h(tag, cls, html) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (html != null) e.innerHTML = html;
+    return e;
+  }
+  function clear(el) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+  }
+  function countdownView(count) {
+    return h('div', 'countdown', String(count || ''));
+  }
+
+  // Timer-balk die naar een deadline toeloopt (rAF, leest live state).
+  function makeTimerBar(getState, duration) {
+    const wrap = h('div', 'timer-bar');
+    const fill = h('i');
+    wrap.appendChild(fill);
+    let raf;
+    function loop() {
+      const st = getState();
+      if (st && st.deadline) {
+        const remain = Math.max(0, st.deadline - Date.now());
+        fill.style.width = Math.min(100, (remain / duration) * 100) + '%';
+      }
+      raf = requestAnimationFrame(loop);
+    }
+    loop();
+    wrap.stop = () => cancelAnimationFrame(raf);
+    return wrap;
+  }
+
+  function submittedTag(text) {
+    return h('div', 'submitted-tag', text || '✅ Ingeleverd! Wachten op de rest…');
+  }
+
+  // =========================================================
+  // Gedeelde basis voor "geheim getal kiezen" (ballon, pizza, gemiddeld)
+  // =========================================================
+  function numberGame(cfg) {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.state = null;
+        st.value = cfg.start;
+        st.submitted = false;
+        clear(root);
+        st.title = h('div', 'mg-title', cfg.emoji + ' ' + cfg.title);
+        st.instruct = h('div', 'mg-instruct', cfg.instruction);
+        st.timer = makeTimerBar(() => st.state, 30000);
+        st.body = h('div');
+        root.appendChild(st.title);
+        root.appendChild(st.instruct);
+        root.appendChild(st.timer);
+        root.appendChild(st.body);
+        this._build();
+      },
+      _build() {
+        clear(st.body);
+        const stepper = h('div', 'stepper');
+        const minus = h('button', null, '−');
+        const val = h('div', 'value', String(st.value));
+        const plus = h('button', null, '+');
+        const min = cfg.min,
+          max = cfg.max;
+        minus.onclick = () => {
+          st.value = Math.max(min, st.value - 1);
+          val.textContent = st.value;
+          Sound.play('button');
+        };
+        plus.onclick = () => {
+          st.value = Math.min(max, st.value + 1);
+          val.textContent = st.value;
+          Sound.play('button');
+        };
+        stepper.appendChild(minus);
+        stepper.appendChild(val);
+        stepper.appendChild(plus);
+        st.body.appendChild(stepper);
+        if (cfg.hint) st.body.appendChild(h('div', 'mg-instruct', cfg.hint));
+        const submit = h('button', 'btn primary big full', 'Inleveren');
+        submit.onclick = () => {
+          st.submitted = true;
+          st.ctx.send({ type: 'submit', value: st.value });
+          Sound.play('start');
+          this._submittedView();
+        };
+        st.body.appendChild(submit);
+      },
+      _submittedView() {
+        clear(st.body);
+        st.body.appendChild(submittedTag('✅ Je koos ' + st.value + '. Wachten op de rest…'));
+        st.body.appendChild(st.statusEl || (st.statusEl = h('div', 'waiting-others')));
+      },
+      update(state) {
+        st.state = state;
+        if (st.submitted && st.statusEl) {
+          st.statusEl.textContent =
+            (state.submitted ? state.submitted.length : 0) + ' / ' + state.total + ' ingeleverd';
+        }
+      },
+      unmount() {
+        if (st.timer) st.timer.stop();
+      },
+    };
+  }
+
+  MG.ballon = numberGame({
+    title: 'De Ballon',
+    emoji: '🎈',
+    instruction: 'Hoeveel pompslagen geef jij? Te veel = knal, te weinig = profiteur.',
+    min: 1,
+    max: 20,
+    start: 10,
+  });
+  MG.pizzapunt = numberGame({
+    title: 'De Pizzapunt',
+    emoji: '🍕',
+    instruction: 'Hoeveel stukken pizza claim je? Niet te hebberig, niet te bescheiden.',
+    min: 0,
+    max: 12,
+    start: 6,
+  });
+  MG.gemiddeldgetal = numberGame({
+    title: 'Het Gemiddelde Getal',
+    emoji: '🔢',
+    instruction: 'Kies 0–100. Kom zo dicht mogelijk bij het groepsgemiddelde.',
+    hint: 'De dichtste bij het gemiddelde wint!',
+    min: 0,
+    max: 100,
+    start: 50,
+  });
+
+  // =========================================================
+  // Verdeel & Heers — strafpunten verdelen
+  // =========================================================
+  MG.verdeelheers = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.state = null;
+        st.submitted = false;
+        st.alloc = {};
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '😈 Verdeel & Heers'));
+        root.appendChild(
+          h('div', 'mg-instruct', 'Verdeel 5 strafpunten over de anderen. Niet aan jezelf!')
+        );
+        st.timer = makeTimerBar(() => st.state, 30000);
+        root.appendChild(st.timer);
+        st.body = h('div');
+        root.appendChild(st.body);
+      },
+      _build(targets) {
+        clear(st.body);
+        st.remainEl = h('div', 'alloc-remain');
+        st.body.appendChild(st.remainEl);
+        targets.forEach((t) => {
+          if (!(t.id in st.alloc)) st.alloc[t.id] = 0;
+          const row = h('div', 'alloc-row');
+          row.appendChild(Char.el(t.character));
+          row.appendChild(h('span', 'an', t.name));
+          const minus = h('button', null, '−');
+          const val = h('span', 'av', String(st.alloc[t.id]));
+          const plus = h('button', null, '+');
+          minus.onclick = () => {
+            if (st.alloc[t.id] > 0) {
+              st.alloc[t.id]--;
+              val.textContent = st.alloc[t.id];
+              this._refresh();
+              Sound.play('button');
+            }
+          };
+          plus.onclick = () => {
+            if (this._remaining() > 0) {
+              st.alloc[t.id]++;
+              val.textContent = st.alloc[t.id];
+              this._refresh();
+              Sound.play('button');
+            }
+          };
+          row.appendChild(minus);
+          row.appendChild(val);
+          row.appendChild(plus);
+          st.body.appendChild(row);
+        });
+        st.submit = h('button', 'btn primary big full', 'Inleveren');
+        st.submit.onclick = () => {
+          if (this._remaining() !== 0) return;
+          st.submitted = true;
+          st.ctx.send({ type: 'submit', value: st.alloc });
+          Sound.play('start');
+          clear(st.body);
+          st.body.appendChild(submittedTag());
+        };
+        st.body.appendChild(st.submit);
+        this._refresh();
+      },
+      _remaining() {
+        const used = Object.values(st.alloc).reduce((a, b) => a + b, 0);
+        return 5 - used;
+      },
+      _refresh() {
+        const r = this._remaining();
+        st.remainEl.textContent = 'Nog te verdelen: ' + r + ' / 5';
+        st.submit.disabled = r !== 0;
+      },
+      update(state) {
+        st.state = state;
+        if (!st.built && state.targets) {
+          // Toon alleen anderen (server stuurt alle actieve spelers).
+          const targets = state.targets.filter((t) => t.id !== st.ctx.me);
+          const enriched = targets.map((t) => {
+            const p = st.ctx.players.find((pp) => pp.id === t.id);
+            return { id: t.id, name: t.name, character: p ? p.character : {} };
+          });
+          st.built = true;
+          this._build(enriched);
+        }
+      },
+      unmount() {
+        st.built = false;
+        if (st.timer) st.timer.stop();
+      },
+    };
+  })();
+
+  // =========================================================
+  // De Tikkampioen — 5 seconden tikken
+  // =========================================================
+  MG.tikkampioen = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.state = null;
+        st.local = 0;
+        clear(root);
+        st.wrap = root;
+        st.wrap.appendChild(h('div', 'mg-title', '👆 De Tikkampioen'));
+        st.info = h('div', 'mg-instruct', 'Tik 5 seconden — niet te veel, niet te weinig!');
+        st.wrap.appendChild(st.info);
+        st.timer = makeTimerBar(() => st.state, 5000);
+        st.wrap.appendChild(st.timer);
+        st.counter = h('div', 'tap-counter', '0');
+        st.wrap.appendChild(st.counter);
+        st.btn = h('button', 'big-button blue', 'TIK!');
+        st.btn.disabled = true;
+        st.btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (st.btn.disabled) return;
+          st.local++;
+          st.counter.textContent = st.local;
+          st.ctx.send({ type: 'tap' });
+          Sound.play('tap');
+        });
+        st.wrap.appendChild(st.btn);
+      },
+      update(state) {
+        st.state = state;
+        if (state.phase === 'countdown') {
+          st.counter.textContent = state.count;
+          st.btn.disabled = true;
+        } else if (state.phase === 'tap') {
+          st.btn.disabled = false;
+          // Toon de server-telling als die er is (autoritatief).
+          const sv = state.counts && state.counts[st.ctx.me];
+          if (typeof sv === 'number') st.counter.textContent = Math.max(sv, st.local);
+        }
+      },
+      unmount() {
+        if (st.timer) st.timer.stop();
+      },
+    };
+  })();
+
+  // =========================================================
+  // De Berenrace — verstop je op tijd
+  // =========================================================
+  MG.berenrace = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.hidden = false;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '🐻 De Berenrace'));
+        st.track = h('div');
+        st.track.style.cssText =
+          'position:relative;height:120px;background:linear-gradient(#bbf7d0,#86efac);border-radius:18px;overflow:hidden;margin:6px 0;';
+        st.bear = h('div', null, '🐻');
+        st.bear.style.cssText = 'position:absolute;bottom:14px;left:0;font-size:54px;transition:left .15s linear;';
+        st.runner = h('div', null, '🏃');
+        st.runner.style.cssText = 'position:absolute;bottom:14px;right:10px;font-size:48px;';
+        st.track.appendChild(st.bear);
+        st.track.appendChild(st.runner);
+        root.appendChild(st.track);
+        st.time = h('div', 'mg-instruct', '0.0s');
+        root.appendChild(st.time);
+        st.btn = h('button', 'big-button', 'VERSTOP JE!');
+        st.btn.onclick = () => {
+          if (st.hidden) return;
+          st.hidden = true;
+          st.ctx.send({ type: 'hide' });
+          st.runner.textContent = '🌳';
+          st.btn.textContent = 'Verstopt! 🤫';
+          st.btn.disabled = true;
+          st.btn.classList.add('green');
+          Sound.play('pop');
+        };
+        root.appendChild(st.btn);
+      },
+      update(state) {
+        if (state.phase === 'countdown') {
+          st.time.textContent = 'Klaar… ' + state.count;
+          return;
+        }
+        const prog = state.bear || 0;
+        st.bear.style.left = 10 + prog * 70 + '%';
+        st.time.textContent = ((state.elapsed || 0) / 1000).toFixed(1) + 's';
+        if (prog > 0.85 && !st.hidden) st.btn.style.background = '#b91c1c';
+      },
+      unmount() {},
+    };
+  })();
+
+  // =========================================================
+  // Schermstaren — vinger vasthouden, op gevoel loslaten
+  // =========================================================
+  MG.schermstaren = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.down = false;
+        st.released = false;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '👁️ Schermstaren'));
+        st.info = h('div', 'mg-instruct', 'Leg je vinger op het vlak hieronder.');
+        root.appendChild(st.info);
+        st.pad = h('div');
+        st.pad.style.cssText =
+          'height:42vh;border-radius:20px;background:#1e1b4b;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:24px;text-align:center;touch-action:none;';
+        st.pad.textContent = 'Houd vast';
+        st.pad.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          if (st.down || st.released) return;
+          st.down = true;
+          st.ctx.send({ type: 'down' });
+          st.pad.style.background = '#4c1d95';
+          st.pad.textContent = 'Blijf vasthouden…';
+          Sound.play('tick');
+        });
+        const release = (e) => {
+          if (!st.down || st.released) return;
+          if (st.phase !== 'hold') return; // pas loslaten als de meting loopt
+          st.released = true;
+          st.ctx.send({ type: 'up' });
+          st.pad.style.background = '#16a34a';
+          st.pad.textContent = 'Losgelaten! 😅';
+          Sound.play('pop');
+        };
+        st.pad.addEventListener('pointerup', release);
+        st.pad.addEventListener('pointercancel', release);
+        st.pad.addEventListener('pointerleave', release);
+        root.appendChild(st.pad);
+      },
+      update(state) {
+        st.phase = state.phase;
+        if (state.phase === 'wait') {
+          st.info.textContent =
+            'Wachten op iedereen… (' + (state.readyCount || 0) + '/' + state.total + ')';
+        } else if (state.phase === 'hold' && !st.released) {
+          st.info.textContent = 'Laat los op gevoel — niet als eerste, niet als laatste!';
+          if (st.down) st.pad.textContent = 'NU loslaten op gevoel…';
+        }
+      },
+      unmount() {},
+    };
+  })();
+
+  // =========================================================
+  // Het Doolhof Dilemma
+  // =========================================================
+  MG.doolhof = (function () {
+    const st = {};
+    function draw() {
+      const { grid, w, h: gh } = st.maze;
+      const cw = st.canvas.width / w;
+      const ch = st.canvas.height / gh;
+      const c = st.ctx2d;
+      c.fillStyle = '#0f0a2e';
+      c.fillRect(0, 0, st.canvas.width, st.canvas.height);
+      c.fillStyle = '#ede9fe';
+      for (let y = 0; y < gh; y++)
+        for (let x = 0; x < w; x++)
+          if (grid[y][x] === 0) c.fillRect(x * cw, y * ch, cw + 0.6, ch + 0.6);
+      // uitgang
+      c.fillStyle = '#22c55e';
+      c.fillRect(st.maze.exit[0] * cw, st.maze.exit[1] * ch, cw, ch);
+      // speler
+      c.font = Math.min(cw, ch) + 'px serif';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText('🙂', (st.px + 0.5) * cw, (st.py + 0.5) * ch);
+    }
+    function move(dx, dy) {
+      if (st.done) return;
+      const g = st.maze.grid;
+      const nx = st.px + dx,
+        ny = st.py + dy;
+      if (ny < 0 || ny >= st.maze.h || nx < 0 || nx >= st.maze.w) return;
+      if (g[ny][nx] === 1) return;
+      st.px = nx;
+      st.py = ny;
+      draw();
+      if (st.px === st.maze.exit[0] && st.py === st.maze.exit[1]) {
+        st.done = true;
+        st.ctx.send({ type: 'reach' });
+        st.info.textContent = '🎉 Uitgang gevonden! Wachten op de rest…';
+        Sound.play('reveal');
+      }
+    }
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.done = false;
+        st.maze = null;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '🌀 Het Doolhof'));
+        st.info = h('div', 'mg-instruct', 'Vind de uitgang — gemiddelde tijd wint!');
+        root.appendChild(st.info);
+        st.canvas = h('canvas', 'mg-canvas');
+        st.canvas.width = 300;
+        st.canvas.height = 300;
+        st.canvas.style.maxWidth = '300px';
+        st.canvas.style.margin = '0 auto';
+        st.ctx2d = st.canvas.getContext('2d');
+        root.appendChild(st.canvas);
+
+        // Swipe
+        let sx, sy;
+        st.canvas.addEventListener('pointerdown', (e) => {
+          sx = e.clientX;
+          sy = e.clientY;
+        });
+        st.canvas.addEventListener('pointerup', (e) => {
+          if (sx == null) return;
+          const dx = e.clientX - sx,
+            dy = e.clientY - sy;
+          if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
+          if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1, 0);
+          else move(0, dy > 0 ? 1 : -1);
+          sx = sy = null;
+        });
+
+        // D-pad
+        const pad = h('div');
+        pad.style.cssText =
+          'display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,56px);gap:6px;justify-content:center;margin-top:10px;';
+        const mk = (txt, dx, dy, col, row) => {
+          const b = h('button', 'btn', txt);
+          b.style.gridColumn = col;
+          b.style.gridRow = row;
+          b.style.fontSize = '24px';
+          b.style.padding = '0';
+          b.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            move(dx, dy);
+          });
+          pad.appendChild(b);
+        };
+        mk('⬆️', 0, -1, '2', '1');
+        mk('⬅️', -1, 0, '1', '2');
+        mk('⬇️', 0, 1, '2', '2');
+        mk('➡️', 1, 0, '3', '2');
+        root.appendChild(pad);
+      },
+      update(state) {
+        if (state.maze && !st.maze) {
+          st.maze = state.maze;
+          st.px = state.maze.start[0];
+          st.py = state.maze.start[1];
+          draw();
+        }
+        if (state.phase === 'countdown') {
+          st.info.textContent = 'Start over… ' + state.count;
+        } else if (state.phase === 'run' && !st.done) {
+          const fin = state.finished ? state.finished.length : 0;
+          st.info.textContent = 'Vind de uitgang! (' + fin + '/' + state.total + ' klaar)';
+        }
+      },
+      unmount() {},
+    };
+  })();
+
+  // =========================================================
+  // De Blinde Schutter — katapult in het donker
+  // =========================================================
+  MG.blindeschutter = (function () {
+    const st = {};
+    function draw() {
+      const c = st.ctx2d,
+        W = st.canvas.width,
+        H = st.canvas.height;
+      c.fillStyle = '#05030f';
+      c.fillRect(0, 0, W, H);
+      // klif + katapult
+      c.fillStyle = '#3b2f5e';
+      c.fillRect(0, H - 30, 70, 30);
+      c.font = '34px serif';
+      c.fillText('🪨', 18, H - 6);
+      // aim-pijl
+      const cx = 50,
+        cy = H - 34;
+      const rad = (st.angle * Math.PI) / 180;
+      const len = 20 + (st.power / 100) * 90;
+      c.strokeStyle = '#ffd23f';
+      c.lineWidth = 4;
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.lineTo(cx + Math.cos(rad) * len, cy - Math.sin(rad) * len);
+      c.stroke();
+      c.fillStyle = '#fff';
+      c.font = '14px sans-serif';
+      c.fillText('hoek ' + Math.round(st.angle) + '°  kracht ' + Math.round(st.power), 10, 20);
+    }
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.angle = 45;
+        st.power = 50;
+        st.fired = false;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '🎯 De Blinde Schutter'));
+        root.appendChild(
+          h('div', 'mg-instruct', 'Sleep om te mikken. De gemiddelde afstand wint — niet te ver, niet te kort!')
+        );
+        st.timer = makeTimerBar(() => st.state, 30000);
+        root.appendChild(st.timer);
+        st.canvas = h('canvas', 'mg-canvas');
+        st.canvas.width = 320;
+        st.canvas.height = 220;
+        st.canvas.style.maxWidth = '320px';
+        st.canvas.style.margin = '0 auto';
+        st.ctx2d = st.canvas.getContext('2d');
+        root.appendChild(st.canvas);
+
+        const origin = { x: 50 };
+        const onDrag = (e) => {
+          if (st.fired) return;
+          const r = st.canvas.getBoundingClientRect();
+          const sx = ((e.clientX - r.left) / r.width) * st.canvas.width;
+          const sy = ((e.clientY - r.top) / r.height) * st.canvas.height;
+          const dx = sx - origin.x;
+          const dy = st.canvas.height - 34 - sy;
+          st.angle = Math.max(5, Math.min(85, (Math.atan2(Math.max(1, dy), Math.max(1, dx)) * 180) / Math.PI));
+          st.power = Math.max(1, Math.min(100, Math.hypot(dx, dy) / 1.6));
+          draw();
+        };
+        st.canvas.addEventListener('pointerdown', (e) => {
+          st.dragging = true;
+          onDrag(e);
+        });
+        st.canvas.addEventListener('pointermove', (e) => {
+          if (st.dragging) onDrag(e);
+        });
+        window.addEventListener('pointerup', () => (st.dragging = false));
+
+        st.fire = h('button', 'btn primary big full', '🔥 Schiet!');
+        st.fire.onclick = () => {
+          if (st.fired) return;
+          st.fired = true;
+          st.ctx.send({ type: 'submit', value: { angle: st.angle, power: st.power } });
+          Sound.play('start');
+          st.fire.textContent = '✅ Geschoten in het donker…';
+          st.fire.disabled = true;
+        };
+        root.appendChild(st.fire);
+        draw();
+      },
+      update(state) {
+        st.state = state;
+      },
+      unmount() {
+        if (st.timer) st.timer.stop();
+      },
+      revealVisual(reveal) {
+        // Teken alle banen.
+        const wrap = h('div');
+        const cv = h('canvas');
+        cv.width = 340;
+        cv.height = 200;
+        cv.style.cssText = 'width:100%;max-width:340px;background:#05030f;border-radius:16px;display:block;margin:0 auto;';
+        const c = cv.getContext('2d');
+        const rows = reveal.ranking.filter((r) => !r.disconnected && r.distance != null);
+        const maxD = Math.max(1, ...rows.map((r) => r.distance));
+        rows.forEach((r, i) => {
+          const rad = ((r.angle || 45) * Math.PI) / 180;
+          const range = (r.distance / maxD) * 300 + 20;
+          const hue = (i * 47) % 360;
+          c.strokeStyle = 'hsl(' + hue + ',80%,60%)';
+          c.lineWidth = 2;
+          c.beginPath();
+          for (let t = 0; t <= 1; t += 0.05) {
+            const x = 20 + range * t;
+            const y = 180 - Math.sin(rad) * range * (t - t * t) * 4;
+            if (t === 0) c.moveTo(x, y);
+            else c.lineTo(x, y);
+          }
+          c.stroke();
+          c.fillStyle = 'hsl(' + hue + ',80%,60%)';
+          c.fillText(r.name, 20 + range, 178);
+        });
+        wrap.appendChild(cv);
+        return wrap;
+      },
+    };
+  })();
+
+  // =========================================================
+  // Cirkeltrek — teken een cirkel
+  // =========================================================
+  MG.cirkeltrek = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.path = [];
+        st.drawing = false;
+        st.submitted = false;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '⭕ Cirkeltrek'));
+        root.appendChild(
+          h('div', 'mg-instruct', 'Teken één cirkel. De gemiddelde oppervlakte wint — niet de grootste of de kleinste!')
+        );
+        st.timer = makeTimerBar(() => st.state, 30000);
+        root.appendChild(st.timer);
+        st.canvas = h('canvas', 'mg-canvas');
+        const size = Math.min(320, window.innerWidth - 40);
+        st.canvas.width = size;
+        st.canvas.height = size;
+        st.canvas.style.cssText = 'background:#fff;border-radius:16px;margin:0 auto;display:block;';
+        st.c = st.canvas.getContext('2d');
+        const pos = (e) => {
+          const r = st.canvas.getBoundingClientRect();
+          return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+        };
+        const redraw = () => {
+          st.c.clearRect(0, 0, size, size);
+          st.c.strokeStyle = '#6d28d9';
+          st.c.lineWidth = 5;
+          st.c.lineJoin = 'round';
+          st.c.beginPath();
+          st.path.forEach((p, i) => {
+            const x = p[0] * size,
+              y = p[1] * size;
+            i ? st.c.lineTo(x, y) : st.c.moveTo(x, y);
+          });
+          st.c.stroke();
+        };
+        st.canvas.addEventListener('pointerdown', (e) => {
+          if (st.submitted) return;
+          e.preventDefault();
+          st.drawing = true;
+          st.path = [pos(e)];
+        });
+        st.canvas.addEventListener('pointermove', (e) => {
+          if (!st.drawing) return;
+          st.path.push(pos(e));
+          redraw();
+        });
+        const end = () => {
+          st.drawing = false;
+        };
+        st.canvas.addEventListener('pointerup', end);
+        st.canvas.addEventListener('pointercancel', end);
+        root.appendChild(st.canvas);
+
+        const row = h('div', 'creator-actions');
+        const clr = h('button', 'btn', 'Wissen');
+        clr.onclick = () => {
+          if (st.submitted) return;
+          st.path = [];
+          st.c.clearRect(0, 0, size, size);
+        };
+        st.submit = h('button', 'btn primary', 'Inleveren');
+        st.submit.onclick = () => {
+          if (st.submitted || st.path.length < 3) {
+            if (st.path.length < 3) Toast('Teken eerst een cirkel!');
+            return;
+          }
+          st.submitted = true;
+          st.ctx.send({ type: 'submit', value: { path: st.path.slice(0, 590) } });
+          Sound.play('start');
+          st.submit.textContent = '✅ Ingeleverd';
+          st.submit.disabled = true;
+        };
+        row.appendChild(clr);
+        row.appendChild(st.submit);
+        root.appendChild(row);
+      },
+      update(state) {
+        st.state = state;
+      },
+      unmount() {
+        if (st.timer) st.timer.stop();
+      },
+      revealVisual(reveal) {
+        const wrap = h('div');
+        const cv = h('canvas');
+        const size = Math.min(300, window.innerWidth - 40);
+        cv.width = size;
+        cv.height = size;
+        cv.style.cssText = 'background:#fff;border-radius:16px;display:block;margin:0 auto;';
+        const c = cv.getContext('2d');
+        const rows = reveal.ranking
+          .filter((r) => r.path && r.path.length)
+          .sort((a, b) => (a.area || 0) - (b.area || 0));
+        rows.forEach((r, i) => {
+          const hue = (i * 57) % 360;
+          c.strokeStyle = 'hsl(' + hue + ',75%,55%)';
+          c.lineWidth = 3;
+          c.beginPath();
+          r.path.forEach((p, j) => {
+            const x = p[0] * size,
+              y = p[1] * size;
+            j ? c.lineTo(x, y) : c.moveTo(x, y);
+          });
+          c.closePath();
+          c.stroke();
+        });
+        wrap.appendChild(cv);
+        return wrap;
+      },
+    };
+  })();
+
+  // Lichtgewicht toast (app definieert de echte; fallback hier).
+  function Toast(msg) {
+    if (window.AppToast) window.AppToast(msg);
+  }
+
+  // Onthullings-visual voor het gemiddelde getal: getallenlijn met het gemiddelde.
+  MG.gemiddeldgetal.revealVisual = function (reveal) {
+    const mean = reveal.meta ? reveal.meta.mean : 0;
+    const wrap = h('div');
+    wrap.appendChild(h('div', 'reveal-meta', 'Groepsgemiddelde: ' + mean));
+    const bar = h('div');
+    bar.style.cssText =
+      'position:relative;height:60px;background:#fff;border-radius:14px;margin:8px 0;overflow:hidden;';
+    const meanLine = h('div');
+    meanLine.style.cssText =
+      'position:absolute;top:0;bottom:0;width:3px;background:#ef4444;left:' + mean + '%;';
+    bar.appendChild(meanLine);
+    reveal.ranking.forEach((r) => {
+      if (r.choice == null) return;
+      const dot = h('div', null, '');
+      dot.style.cssText =
+        'position:absolute;top:50%;transform:translate(-50%,-50%);font-size:11px;font-weight:800;left:' +
+        r.choice +
+        '%;';
+      dot.textContent = '🔵';
+      dot.title = r.name + ': ' + r.choice;
+      bar.appendChild(dot);
+    });
+    wrap.appendChild(bar);
+    return wrap;
+  };
+
+  // Onthullings-visual voor de ballon.
+  MG.ballon.revealVisual = function (reveal) {
+    const maxP = reveal.meta ? reveal.meta.maxPumps : 0;
+    const wrap = h('div', 'reveal-meta');
+    wrap.innerHTML = '🎈 Hoogste inzet: ' + maxP + ' slagen — <b>KNAL!</b> 💥';
+    return wrap;
+  };
+
+  window.MG = MG;
+})();

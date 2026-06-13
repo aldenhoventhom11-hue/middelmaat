@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#5b21b6" />
+    <title>Middelmaat</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!-- Bovenbalk: ronde-teller, mute, verbindingsstatus -->
+    <header id="topbar" class="hidden">
+      <button id="standings-btn" class="chip" type="button">📊 Stand</button>
+      <span id="round-pill" class="pill"></span>
+      <button id="mute-btn" class="chip" type="button" aria-label="Geluid">🔊</button>
+    </header>
+
+    <main id="app">
+      <!-- HOME -->
+      <section id="screen-home" class="screen active">
+        <div class="hero">
+          <h1 class="logo">Middel<span>maat</span></h1>
+          <p class="tagline">Niet de beste. Niet de slechtste.<br />Word zo <b>gemiddeld</b> mogelijk.</p>
+          <div class="home-actions">
+            <button class="btn big primary" data-go="create">Nieuwe lobby maken</button>
+            <button class="btn big" data-go="join">Meedoen met code</button>
+          </div>
+          <p class="hint">3 t/m 10 spelers · speel samen op je telefoon</p>
+        </div>
+      </section>
+
+      <!-- CHARACTER CREATOR -->
+      <section id="screen-creator" class="screen">
+        <h2 id="creator-title">Ontwerp jezelf</h2>
+        <div class="creator-preview">
+          <div id="char-preview"></div>
+        </div>
+        <input
+          id="name-input"
+          class="text-input"
+          type="text"
+          maxlength="16"
+          placeholder="Jouw naam"
+          autocomplete="off"
+        />
+        <div id="creator-controls" class="creator-controls"></div>
+
+        <div id="join-code-row" class="hidden">
+          <input
+            id="code-input"
+            class="text-input code-field"
+            type="text"
+            maxlength="6"
+            placeholder="LOBBYCODE"
+            autocomplete="off"
+            autocapitalize="characters"
+          />
+        </div>
+
+        <div class="creator-actions">
+          <button class="btn" data-go="home">Terug</button>
+          <button id="creator-confirm" class="btn primary">Klaar!</button>
+        </div>
+      </section>
+
+      <!-- LOBBY -->
+      <section id="screen-lobby" class="screen">
+        <h2>Lobby</h2>
+        <div class="code-box">
+          <span class="code-label">Code</span>
+          <span id="lobby-code" class="code-value">······</span>
+          <button id="copy-code" class="chip" type="button">Kopieer</button>
+        </div>
+        <p class="hint">Deel deze code zodat vrienden kunnen meedoen.</p>
+        <div id="lobby-players" class="player-grid"></div>
+        <div id="lobby-controls" class="sticky-actions"></div>
+      </section>
+
+      <!-- RONDE-INTRO -->
+      <section id="screen-intro" class="screen">
+        <div class="intro-card">
+          <span id="intro-round" class="pill"></span>
+          <h2 id="intro-title"></h2>
+          <p id="intro-theme" class="intro-theme"></p>
+          <div class="intro-rules"><p id="intro-rules"></p></div>
+        </div>
+        <div id="intro-controls" class="sticky-actions"></div>
+      </section>
+
+      <!-- SPELEN -->
+      <section id="screen-play" class="screen">
+        <div id="mg-root" class="mg-root"></div>
+      </section>
+
+      <!-- ONTHULLING + STAND -->
+      <section id="screen-reveal" class="screen">
+        <h2 id="reveal-title">Uitslag</h2>
+        <div id="reveal-body" class="reveal-body"></div>
+        <div id="reveal-controls" class="sticky-actions"></div>
+      </section>
+
+      <!-- PODIUM -->
+      <section id="screen-podium" class="screen">
+        <h2 class="podium-head">🏆 Eindstand</h2>
+        <div id="podium-body"></div>
+        <div id="podium-controls" class="sticky-actions"></div>
+      </section>
+    </main>
+
+    <!-- Tussenstand-overlay -->
+    <div id="standings-overlay" class="overlay hidden">
+      <div class="overlay-card">
+        <h3>Tussenstand</h3>
+        <div id="standings-list"></div>
+        <button id="standings-close" class="btn primary">Sluiten</button>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/sound.js"></script>
+    <script src="js/character.js"></script>
+    <script src="js/net.js"></script>
+    <script src="js/minigames.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>

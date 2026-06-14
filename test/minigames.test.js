@@ -66,6 +66,60 @@ const scenarios = {
     }
     await h.advance(10000);
   },
+  async bier(h, n) {
+    await h.advance(2400);
+    for (let i = 0; i < n; i++) {
+      h.emit('p' + i, { type: 'down' });
+      await h.advance(100 + i * 30); // gestaffeld, alles binnen het 6s-venster
+      h.emit('p' + i, { type: 'up' });
+    }
+    await h.advance(7000);
+  },
+  async raket(h, n) {
+    await h.advance(2400);
+    for (let i = 0; i < n; i++) {
+      await h.advance(200 * (i + 1));
+      h.emit('p' + i, { type: 'launch' });
+    }
+    await h.advance(13000);
+  },
+  async dobbel(h, n) {
+    await h.advance(2400);
+    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'roll' });
+    await h.advance(9000);
+  },
+  async haaien(h, n) {
+    await h.advance(2400);
+    // Iedereen duwt de volgende; gestaffeld zodat ze op verschillende momenten vallen.
+    for (let r = 0; r < 8; r++) {
+      for (let i = 0; i < n; i++) {
+        h.emit('p' + i, { type: 'push', target: 'p' + ((i + 1) % n) });
+      }
+      await h.advance(400);
+    }
+    await h.advance(23000);
+  },
+  async sprint(h, n) {
+    await h.advance(2400);
+    for (let r = 0; r < 30; r++) {
+      for (let i = 0; i < n; i++) {
+        // Sneller naarmate index lager: meer tikken.
+        if (r % (i + 1) === 0) h.emit('p' + i, { type: 'tap', side: r % 2 ? 'l' : 'r' });
+      }
+      await h.advance(120);
+    }
+    await h.advance(26000);
+  },
+  async golf(h, n) {
+    await h.flush();
+    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: 2 + i });
+    await h.flush();
+  },
+  async kapper(h, n) {
+    await h.flush();
+    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: Math.min(0.95, 0.1 + i * 0.08) });
+    await h.flush();
+  },
   async verdeelheers(h, n) {
     await h.flush();
     for (let i = 0; i < n; i++) {

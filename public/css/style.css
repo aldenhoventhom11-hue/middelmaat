@@ -1126,6 +1126,30 @@ h2 {
     transform: translateY(3px) rotate(2deg);
   }
 }
+@keyframes swim {
+  from {
+    transform: translateX(0) scaleX(1);
+  }
+  49% {
+    transform: translateX(40px) scaleX(1);
+  }
+  50% {
+    transform: translateX(40px) scaleX(-1);
+  }
+  to {
+    transform: translateX(0) scaleX(-1);
+  }
+}
+@keyframes slowmo {
+  0% {
+    transform: scale(1.04);
+    filter: brightness(1.2);
+  }
+  100% {
+    transform: scale(1);
+    filter: none;
+  }
+}
 
 /* Home: korte uitleg */
 .howto {

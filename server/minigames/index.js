@@ -15,6 +15,13 @@ const modules = [
   require('./lift'), // 11
   require('./toren'), // 12
   require('./schatten'), // 13
+  require('./bier'), // 14
+  require('./raket'), // 15
+  require('./dobbel'), // 16
+  require('./haaien'), // 17
+  require('./sprint'), // 18
+  require('./golf'), // 19
+  require('./kapper'), // 20
 ];
 
 // Emoji per minigame (voor het rad en de intro-kaart).
@@ -32,6 +39,13 @@ const EMOJI = {
   lift: '🛗',
   toren: '🧱',
   schatten: '🫙',
+  bier: '🍺',
+  raket: '🚀',
+  dobbel: '🎲',
+  haaien: '🦈',
+  sprint: '🏃',
+  golf: '⛳',
+  kapper: '✂️',
 };
 
 const minigames = new Map();

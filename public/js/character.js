@@ -244,7 +244,16 @@
       `<rect x="${x - legW / 2}" y="${legTop}" width="${legW}" height="${ankleY - legTop}" rx="${legW / 2}" fill="${legColor}"/>`;
     const shoeEl = (x) =>
       `<ellipse cx="${x + 2}" cy="${feetY - 3}" rx="${legW * 0.72}" ry="6" fill="${bareLegs ? '#d6607a' : shoe}"/>`;
-    const legs = leg(lLegX) + leg(rLegX) + shoeEl(lLegX) + shoeEl(rLegX);
+    const runPhase = opts.runPhase || 0; // 0/1 voor de ren-cyclus
+    let legs;
+    if (pose === 'run') {
+      const sw = 26;
+      const legG = (x, ang) =>
+        `<g transform="rotate(${ang} ${x} ${legTop})">${leg(x)}${shoeEl(x)}</g>`;
+      legs = legG(lLegX, runPhase ? sw : -sw) + legG(rLegX, runPhase ? -sw : sw);
+    } else {
+      legs = leg(lLegX) + leg(rLegX) + shoeEl(lLegX) + shoeEl(rLegX);
+    }
 
     // --- Rok/jurk ---
     let skirt = '';
@@ -276,8 +285,8 @@
       handLX = CX - torsoHalf - 6; handLY = hcy - hr - 14;
       handRX = CX + torsoHalf + 6; handRY = hcy - hr - 14;
     } else if (pose === 'run') {
-      handLX = CX - torsoHalf - 12 * bf; handLY = shY + 22;
-      handRX = CX + torsoHalf + 10 * bf; handRY = shY + 6;
+      handLX = CX - torsoHalf - 11 * bf; handLY = shY + (runPhase ? 4 : 24);
+      handRX = CX + torsoHalf + 11 * bf; handRY = shY + (runPhase ? 24 : 4);
     } else {
       handLX = CX - torsoHalf - 7 * bf; handLY = hipY - 4;
       handRX = CX + torsoHalf + 7 * bf; handRY = hipY - 4;

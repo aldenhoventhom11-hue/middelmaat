@@ -2,67 +2,114 @@
 
 const { waitUntil, countdown, secs } = require('./_realtime');
 
-// Minigame 17 — Haaieneiland (tik-duwen, survival).
-// Iedereen staat op een rond platform met haaien eromheen. Tik op een
-// tegenstander om 'm naar de rand te duwen; ram op je eigen knop om naar het
-// midden terug te kruipen. Wie als eerste én als laatste het water in gaat,
-// verliest. De middelste overlevingstijd wint.
-const MAX_TIME = 22000;
-const PUSH = 0.16; // hoeveel een tik een ander naar de rand duwt
-const RECOVER = 0.07; // hoeveel een eigen tik je terug naar het midden brengt
+// Minigame 17 — Haaieneiland (joystick, survival).
+// Iedereen staat op een rond platform met haaien eromheen. Je beweegt je eigen
+// karakter met een joystick en kunt anderen van het eiland bonken. Wie als
+// eerste én als laatste in het water valt, verliest; de middelste overlevingstijd
+// wint. Server-autoritatief: posities en botsingen worden hier berekend.
+const MAX_TIME = 25000;
+const ACC = 0.008; // versnelling per tick uit de joystick
+const FRICTION = 0.85;
+const PR = 0.12; // botsstraal per speler
+const MINDIST = PR * 2;
 
 module.exports = {
   id: 'haaien',
   title: 'Haaieneiland',
-  theme: 'Duw de anderen het haaienwater in — maar val niet als eerste of laatste!',
-  rules: 'Tik op een tegenstander om ’m naar de rand te duwen. Ram op JIJ om terug te kruipen. Niet als eerste of laatste in het water — het midden wint.',
+  theme: 'Ren over het eiland en bonk de anderen in het haaienwater!',
+  rules: 'Beweeg met de joystick en duw de anderen van het eiland. Niet als eerste of laatste in het water — de middelste overlevingstijd wint.',
   type: 'realtime',
   scoring: 'symmetric',
 
   async run(ctx) {
     if (!(await countdown(ctx, 'haaien'))) return { outcomes: {} };
     const start = ctx.now();
-    const pos = {}; // pid -> 0 (midden) .. 1 (rand)
-    const fallen = {}; // pid -> valtijd
-    for (const id of ctx.ids) pos[id] = 0;
+    const n = ctx.ids.length;
+    const pos = {};
+    const vel = {};
+    const input = {};
+    const fallen = {};
+    ctx.ids.forEach((id, i) => {
+      const a = (i / n) * Math.PI * 2;
+      pos[id] = { x: Math.cos(a) * 0.4, y: Math.sin(a) * 0.4 };
+      vel[id] = { x: 0, y: 0 };
+      input[id] = { x: 0, y: 0 };
+    });
 
+    const players = ctx.players.map((p) => ({ id: p.id, name: p.name, character: p.character }));
     const publishState = () => {
-      ctx.patch({
-        phase: 'fight',
-        pos: Object.assign({}, pos),
-        fallen: Object.keys(fallen),
-        players: ctx.players.map((p) => ({ id: p.id, name: p.name, character: p.character })),
-      });
+      const out = {};
+      for (const id of ctx.ids) out[id] = { x: +pos[id].x.toFixed(3), y: +pos[id].y.toFixed(3) };
+      ctx.patch({ phase: 'fight', pos: out, fallen: Object.keys(fallen) });
     };
 
     const off = ctx.onEvent((pid, p) => {
-      if (!ctx.ids.includes(pid) || !p) return;
-      if (pid in fallen) return; // wie eraf is, doet niet meer mee
-      if (p.type === 'push' && p.target && ctx.ids.includes(p.target) && !(p.target in fallen)) {
-        pos[p.target] = Math.min(1, pos[p.target] + PUSH);
-      } else if (p.type === 'recover') {
-        pos[pid] = Math.max(0, pos[pid] - RECOVER);
+      if (!ctx.ids.includes(pid) || !p || pid in fallen) return;
+      if (p.type === 'move') {
+        let dx = Number(p.dx) || 0;
+        let dy = Number(p.dy) || 0;
+        const m = Math.hypot(dx, dy);
+        if (m > 1) {
+          dx /= m;
+          dy /= m;
+        }
+        input[pid] = { x: dx, y: dy };
       }
     });
 
-    ctx.publish({ kind: 'haaien', phase: 'fight', pos, fallen: [], players: ctx.players.map((p) => ({ id: p.id, name: p.name, character: p.character })) });
+    ctx.publish({ kind: 'haaien', phase: 'fight', pos, fallen: [], players });
 
-    await waitUntil(
-      ctx,
-      () => Object.keys(fallen).length >= ctx.ids.length,
-      {
-        pollMs: 120,
-        maxMs: MAX_TIME + 500,
-        onTick: (el) => {
-          for (const id of ctx.ids) {
-            if (!(id in fallen) && pos[id] >= 1) fallen[id] = el;
+    await waitUntil(ctx, () => n - Object.keys(fallen).length <= 1, {
+      pollMs: 55,
+      maxMs: MAX_TIME + 500,
+      onTick: (el) => {
+        // beweging
+        for (const id of ctx.ids) {
+          if (id in fallen) continue;
+          const v = vel[id];
+          v.x = (v.x + input[id].x * ACC) * FRICTION;
+          v.y = (v.y + input[id].y * ACC) * FRICTION;
+          pos[id].x += v.x;
+          pos[id].y += v.y;
+        }
+        // botsingen (paarsgewijs wegduwen)
+        for (let i = 0; i < n; i++) {
+          const a = ctx.ids[i];
+          if (a in fallen) continue;
+          for (let j = i + 1; j < n; j++) {
+            const b = ctx.ids[j];
+            if (b in fallen) continue;
+            let dx = pos[b].x - pos[a].x;
+            let dy = pos[b].y - pos[a].y;
+            let d = Math.hypot(dx, dy) || 0.0001;
+            if (d < MINDIST) {
+              const nx = dx / d;
+              const ny = dy / d;
+              const overlap = (MINDIST - d) / 2;
+              pos[a].x -= nx * overlap;
+              pos[a].y -= ny * overlap;
+              pos[b].x += nx * overlap;
+              pos[b].y += ny * overlap;
+              // impuls: bonk geeft elkaar snelheid
+              const imp = 0.6;
+              vel[a].x -= nx * overlap * imp;
+              vel[a].y -= ny * overlap * imp;
+              vel[b].x += nx * overlap * imp;
+              vel[b].y += ny * overlap * imp;
+            }
           }
-          publishState();
-        },
-      }
-    );
+        }
+        // van het eiland?
+        for (const id of ctx.ids) {
+          if (id in fallen) continue;
+          if (Math.hypot(pos[id].x, pos[id].y) > 1) fallen[id] = el;
+        }
+        publishState();
+      },
+    });
     off();
 
+    // De laatste die nog staat valt symbolisch als allerlaatste (hoogste tijd).
     const end = ctx.now() - start;
     const outcomes = {};
     const reveal = {};

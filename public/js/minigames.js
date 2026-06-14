@@ -204,19 +204,76 @@
       `</svg>`
     );
   }
-  MG.ballon = numberGame({
-    title: 'De Ballon',
-    emoji: '🎈',
-    instruction: 'Hoeveel pompslagen geef jij? Te veel = knal, te weinig = profiteur.',
-    min: 1,
-    max: 20,
-    start: 10,
-    visual(value, cfg) {
-      const d = document.createElement('div');
-      d.innerHTML = balloonSvg(value, cfg.max, '#ff5d5d');
-      return d;
-    },
-  });
+  // Grote, dramatische ballon (grootte 0..1) voor het speelscherm.
+  function bigBalloon(size, color) {
+    const r = 24 + size * 70;
+    const cx = 110,
+      cy = 132 - size * 6;
+    return (
+      '<svg width="220" height="250" viewBox="0 0 220 260">' +
+      '<line x1="' + cx + '" y1="' + (cy + r) + '" x2="' + cx + '" y2="252" stroke="#b8b8c8" stroke-width="2"/>' +
+      '<ellipse cx="' + cx + '" cy="' + cy + '" rx="' + r * 0.92 + '" ry="' + r + '" fill="' + color + '"/>' +
+      '<ellipse cx="' + (cx - r * 0.34) + '" cy="' + (cy - r * 0.36) + '" rx="' + r * 0.2 + '" ry="' + r * 0.32 + '" fill="rgba(255,255,255,0.55)"/>' +
+      '<path d="M' + (cx - 6) + ' ' + (cy + r) + ' l6 8 6 -8 Z" fill="' + color + '"/>' +
+      '</svg>'
+    );
+  }
+  MG.ballon = (function () {
+    const st = {};
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.submitted = false;
+        st.size = 0.4;
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '🎈 De Ballon'));
+        root.appendChild(h('div', 'mg-instruct', 'Sleep de balk om je ballon op te blazen. Niet de grootste (knal!), niet de kleinste!'));
+        st.timer = makeTimerBar(() => st.state, 30000);
+        root.appendChild(st.timer);
+        st.box = h('div');
+        st.box.style.cssText = 'height:210px;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;';
+        root.appendChild(st.box);
+        const draw = () => {
+          st.box.innerHTML = bigBalloon(st.size, st.size > 0.92 ? '#ff3b3b' : '#ff6b6b');
+        };
+        draw();
+        const range = document.createElement('input');
+        range.type = 'range';
+        range.min = '0';
+        range.max = '1000';
+        range.value = '400';
+        range.className = 'slider';
+        range.style.cssText = 'width:100%;margin:10px 0;';
+        range.addEventListener('input', () => {
+          st.size = Number(range.value) / 1000;
+          draw();
+        });
+        root.appendChild(h('div', 'mg-instruct', '⟵ kleiner · groter ⟶'));
+        root.appendChild(range);
+        const submit = h('button', 'btn primary big full', 'Inleveren');
+        submit.onclick = () => {
+          if (st.submitted) return;
+          st.submitted = true;
+          st.ctx.send({ type: 'submit', value: st.size });
+          Sound.play('start');
+          clear(root);
+          root.appendChild(h('div', 'mg-title', '🎈 De Ballon'));
+          const b = h('div');
+          b.style.cssText = 'height:210px;display:flex;align-items:flex-end;justify-content:center;';
+          b.innerHTML = bigBalloon(st.size, '#ff6b6b');
+          root.appendChild(b);
+          root.appendChild(submittedTag('✅ Ingeleverd! Wachten op de rest…'));
+        };
+        root.appendChild(submit);
+      },
+      update(state) {
+        st.state = state;
+      },
+      unmount() {
+        if (st.timer) st.timer.stop();
+      },
+    };
+  })();
   // Pizza-SVG met geclaimde punten gemarkeerd.
   function pizzaSvg(value, max) {
     const cx = 50,
@@ -1133,9 +1190,20 @@
 
   // Onthullings-visual voor de ballon.
   MG.ballon.revealVisual = function (reveal) {
-    const maxP = reveal.meta ? reveal.meta.maxPumps : 0;
-    const wrap = h('div', 'reveal-meta');
-    wrap.innerHTML = '🎈 Hoogste inzet: ' + maxP + ' slagen — <b>KNAL!</b> 💥';
+    // Alle ballonnen naast elkaar, klein -> groot; de grootste knapt.
+    const wrap = h('div');
+    wrap.style.cssText = 'display:flex;align-items:flex-end;justify-content:center;gap:4px;flex-wrap:wrap;background:rgba(0,0,0,0.15);border-radius:14px;padding:8px;';
+    const rows = (reveal.ranking || []).filter((r) => r.size != null).sort((a, b) => a.size - b.size);
+    rows.forEach((r) => {
+      const d = document.createElement('div');
+      d.style.cssText = 'text-align:center;';
+      d.innerHTML = (r.popped ? '💥' : bigBalloon(r.size, r.popped ? '#ff3b3b' : '#ff6b6b').replace('width="220" height="250"', 'width="56" height="76"').replace('viewBox="0 0 220 260"', 'viewBox="20 30 180 220"'));
+      const nm = document.createElement('div');
+      nm.style.cssText = 'font-size:10px;font-weight:800;color:#fff;';
+      nm.textContent = r.name;
+      d.appendChild(nm);
+      wrap.appendChild(d);
+    });
     return wrap;
   };
 
@@ -1194,27 +1262,29 @@
         st.btn.addEventListener('pointercancel', up);
         st.btn.addEventListener('pointerleave', up);
         root.appendChild(st.btn);
+        st.heldMs = 0;
+        st.lastT = Date.now();
         const loop = () => {
-          if (st.holding) {
-            st.level -= 0.02;
+          const now = Date.now();
+          const dt = now - st.lastT;
+          st.lastT = now;
+          if (st.holding && st.heldMs < 6000) {
+            st.heldMs = Math.min(6000, st.heldMs + dt);
             if (Math.random() < 0.35) burst(st.scene, { x: 50, y: 40, color: '#fff8e7', count: 1, speed: 1.4, dur: 22, spread: 1.4, gravity: -0.05 });
-            if (st.level <= 0) {
-              st.level = 1; // nieuw biertje
-              Sound.play('pop');
-            }
           }
+          const frac = st.heldMs / 6000; // 0..1 opgedronken
+          st.level = 1 - frac;
           st.glass.innerHTML = glassSvg(Math.max(0, st.level));
+          const pct = Math.round(frac * 100);
+          if (st.phase !== 'countdown') st.info.textContent = pct + '% opgedronken';
           st.raf = requestAnimationFrame(loop);
         };
         st.raf = requestAnimationFrame(loop);
       },
       update(state) {
         st.state = state;
+        st.phase = state.phase;
         if (state.phase === 'countdown') st.info.textContent = 'Klaar… ' + state.count;
-        else {
-          const ms = state.sips && state.sips[st.ctx.me];
-          if (ms != null) st.info.textContent = 'Slokken: ' + Math.max(0, Math.round(ms / 320));
-        }
       },
       unmount() {
         if (st.timer) st.timer.stop();
@@ -1365,19 +1435,19 @@
       mount(root, ctx) {
         st.ctx = ctx;
         st.fellSeen = {};
+        st.figEls = {};
+        st.players = null;
         clear(root);
         root.appendChild(h('div', 'mg-title', '🦈 Haaieneiland'));
-        st.info = h('div', 'mg-instruct', 'Tik op een ander om ’m de haaien in te duwen!');
+        st.info = h('div', 'mg-instruct', 'Beweeg met de joystick en bonk de anderen het water in!');
         root.appendChild(st.info);
         st.arena = h('div');
         st.arena.style.cssText =
-          'position:relative;width:' + SIZE + 'px;max-width:92vw;aspect-ratio:1;margin:0 auto;border-radius:50%;' +
+          'position:relative;width:' + SIZE + 'px;max-width:80vw;aspect-ratio:1;margin:0 auto;border-radius:50%;' +
           'background:radial-gradient(circle at 50% 45%,#7ec8e3 0 58%,#2f8fc0 60%,#1c6390 100%);overflow:hidden;';
-        // platform
         st.platform = h('div');
         st.platform.style.cssText = 'position:absolute;left:14%;top:14%;width:72%;height:72%;border-radius:50%;background:radial-gradient(circle at 50% 40%,#e9c887,#caa15a);box-shadow:inset 0 0 0 4px #b07d3a;';
         st.arena.appendChild(st.platform);
-        // sharks
         ['🦈', '🦈', '🦈'].forEach((sh, i) => {
           const f = h('div', null, sh);
           f.style.cssText = 'position:absolute;font-size:26px;animation:swim ' + (6 + i) + 's linear infinite;top:' + (10 + i * 35) + '%;left:' + (i % 2 ? 80 : 5) + '%;';
@@ -1387,57 +1457,84 @@
         st.figs.style.cssText = 'position:absolute;inset:0;';
         st.arena.appendChild(st.figs);
         root.appendChild(st.arena);
-        st.btn = h('button', 'big-button green', '💪 BLIJF STAAN! (ram)');
-        const recover = (e) => {
-          e.preventDefault();
-          st.ctx.send({ type: 'recover' });
+
+        // Joystick
+        st.joy = h('div');
+        st.joy.style.cssText = 'position:relative;width:120px;height:120px;border-radius:50%;margin:14px auto 0;background:radial-gradient(circle,rgba(255,255,255,0.85),rgba(255,255,255,0.35));box-shadow:inset 0 0 0 3px rgba(0,0,0,0.15);touch-action:none;';
+        st.knob = h('div');
+        st.knob.style.cssText = 'position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#9b6bff,#5b21b6);box-shadow:0 3px 0 rgba(0,0,0,0.3);will-change:transform;';
+        st.joy.appendChild(st.knob);
+        root.appendChild(st.joy);
+        root.appendChild(h('div', 'mg-instruct', '⟵ joystick: ren over het eiland ⟶'));
+
+        let active = false;
+        let lastSend = 0;
+        const R = 46;
+        const move = (e) => {
+          if (!active) return;
+          const r = st.joy.getBoundingClientRect();
+          let dx = e.clientX - (r.left + r.width / 2);
+          let dy = e.clientY - (r.top + r.height / 2);
+          const d = Math.hypot(dx, dy) || 1;
+          const cl = Math.min(1, d / R);
+          const nx = (dx / d) * cl;
+          const ny = (dy / d) * cl;
+          st.knob.style.transform = 'translate(' + nx * R + 'px,' + ny * R + 'px)';
+          const now = Date.now();
+          if (now - lastSend > 55) {
+            lastSend = now;
+            st.ctx.send({ type: 'move', dx: nx, dy: ny });
+          }
         };
-        st.btn.addEventListener('pointerdown', recover);
-        root.appendChild(st.btn);
+        st.joy.addEventListener('pointerdown', (e) => {
+          active = true;
+          try { st.joy.setPointerCapture(e.pointerId); } catch (x) {}
+          move(e);
+        });
+        st.joy.addEventListener('pointermove', move);
+        const end = () => {
+          if (!active) return;
+          active = false;
+          st.knob.style.transform = '';
+          st.ctx.send({ type: 'move', dx: 0, dy: 0 });
+        };
+        st.joy.addEventListener('pointerup', end);
+        st.joy.addEventListener('pointercancel', end);
       },
       update(state) {
         if (state.phase === 'countdown') {
           st.info.textContent = 'Klaar… ' + state.count;
           return;
         }
-        const players = state.players || [];
+        if (state.players) st.players = state.players;
+        const players = st.players || [];
         const pos = state.pos || {};
         const fallen = state.fallen || [];
         const n = players.length;
-        st.figs.innerHTML = '';
-        players.forEach((p, i) => {
-          const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-          const fell = fallen.includes(p.id);
-          const d = fell ? 0.98 : 0.16 + Math.min(1, pos[p.id] || 0) * 0.74;
-          const cx = 50 + Math.cos(ang) * d * 42;
-          const cy = 50 + Math.sin(ang) * d * 42;
-          const wrap = document.createElement('div');
-          wrap.style.cssText =
-            'position:absolute;left:' + cx + '%;top:' + cy + '%;transform:translate(-50%,-60%);transition:left .15s,top .15s;' +
-            (fell ? 'opacity:.5;filter:grayscale(.6);' : '');
-          const ce = charEl(p.character, 'stand');
-          ce.querySelector('svg').style.height = n > 8 ? '44px' : '62px';
-          wrap.appendChild(ce);
-          if (p.id === st.ctx.me) {
-            wrap.style.filter = 'drop-shadow(0 0 6px #ffd23f)';
-          } else if (!fell) {
-            wrap.style.cursor = 'pointer';
-            wrap.addEventListener('pointerdown', (e) => {
-              e.preventDefault();
-              st.ctx.send({ type: 'push', target: p.id });
-              burst(st.arena, { x: cx, y: cy, emojis: ['💢'], count: 3, speed: 1.5, dur: 20 });
-            });
+        players.forEach((p) => {
+          let el = st.figEls[p.id];
+          if (!el) {
+            el = document.createElement('div');
+            el.style.cssText = 'position:absolute;transform:translate(-50%,-62%);transition:left .08s linear,top .08s linear;will-change:left,top;';
+            const ce = charEl(p.character, 'stand');
+            ce.querySelector('svg').style.height = n > 8 ? '40px' : '56px';
+            el.appendChild(ce);
+            if (p.id === st.ctx.me) el.style.filter = 'drop-shadow(0 0 7px #ffd23f)';
+            st.figs.appendChild(el);
+            st.figEls[p.id] = el;
           }
-          // splash bij vallen
-          if (fell && !st.fellSeen[p.id]) {
+          const pp = pos[p.id] || { x: 0, y: 0 };
+          el.style.left = 50 + pp.x * 36 + '%';
+          el.style.top = 50 + pp.y * 36 + '%';
+          if (fallen.includes(p.id) && !st.fellSeen[p.id]) {
             st.fellSeen[p.id] = 1;
-            burst(st.arena, { x: cx, y: cy, emojis: ['💦', '💧'], count: 10, speed: 2.4, dur: 32 });
+            el.style.opacity = '0.55';
+            el.style.filter = (el.style.filter || '') + ' grayscale(0.6)';
+            burst(st.arena, { x: 50 + pp.x * 36, y: 50 + pp.y * 36, emojis: ['💦', '💧'], count: 10, speed: 2.4, dur: 32 });
             Sound.play('pop');
           }
-          st.figs.appendChild(wrap);
         });
-        const left = n - fallen.length;
-        st.info.textContent = 'Nog ' + left + ' op het eiland — duw de anderen eraf!';
+        st.info.textContent = 'Nog ' + (n - fallen.length) + ' op het eiland!';
       },
       unmount() {},
     };
@@ -1451,34 +1548,47 @@
     return {
       mount(root, ctx) {
         st.ctx = ctx;
-        st.phase = 0;
         st.finished = false;
+        st.runPhase = 0;
+        st.cadence = 0;
+        st.scroll = 0;
+        st.frac = 0;
+        st.lastT = Date.now();
         clear(root);
         root.appendChild(h('div', 'mg-title', '🏃 De 100 Meter'));
         st.info = h('div', 'mg-instruct', 'Tik AFWISSELEND links en rechts om te rennen!');
         root.appendChild(st.info);
-        // baan
+        // stadion
         st.track = h('div');
-        st.track.style.cssText = 'position:relative;height:150px;border-radius:14px;overflow:hidden;background:#c0392b;border:4px solid #8a2a1e;';
+        st.track.style.cssText = 'position:relative;height:184px;border-radius:16px;overflow:hidden;box-shadow:0 6px 0 rgba(0,0,0,0.18);';
+        const sky = h('div');
+        sky.style.cssText = 'position:absolute;left:0;right:0;top:0;height:48px;background:linear-gradient(#7fc8ff,#cfeeff);';
+        const crowd = h('div');
+        crowd.style.cssText = 'position:absolute;left:0;right:0;top:30px;height:22px;background:repeating-linear-gradient(90deg,#ffce54 0 7px,#fc6e51 7px 14px,#4fc1e9 14px 21px,#a0d468 21px 28px);opacity:0.85;';
+        st.laneWrap = h('div');
+        st.laneWrap.style.cssText = 'position:absolute;left:0;right:0;top:52px;bottom:0;background:linear-gradient(#cf4436,#b5392c);overflow:hidden;';
         st.lanes = h('div');
-        st.lanes.style.cssText = 'position:absolute;inset:0;background:repeating-linear-gradient(90deg,#c0392b 0 60px,#a93226 60px 64px);';
-        st.track.appendChild(st.lanes);
+        st.lanes.style.cssText = 'position:absolute;top:0;bottom:0;left:-80px;right:-80px;background:repeating-linear-gradient(90deg,transparent 0 56px,rgba(255,255,255,0.9) 56px 60px);';
+        st.laneWrap.appendChild(st.lanes);
+        st.track.appendChild(sky);
+        st.track.appendChild(crowd);
+        st.track.appendChild(st.laneWrap);
         st.finishLine = h('div');
-        st.finishLine.style.cssText = 'position:absolute;top:0;bottom:0;width:10px;background:repeating-linear-gradient(45deg,#fff 0 6px,#000 6px 12px);right:6%;';
+        st.finishLine.style.cssText = 'position:absolute;top:52px;bottom:0;width:12px;right:6%;background:repeating-linear-gradient(45deg,#fff 0 6px,#111 6px 12px);';
         st.track.appendChild(st.finishLine);
         st.runnerWrap = h('div');
-        st.runnerWrap.style.cssText = 'position:absolute;bottom:6px;left:6%;transition:left .12s linear;';
-        st.setRunner = (phase) => {
+        st.runnerWrap.style.cssText = 'position:absolute;bottom:2px;left:6%;transition:left .12s linear;will-change:left,transform;';
+        st.track.appendChild(st.runnerWrap);
+        root.appendChild(st.track);
+        st.setRunner = () => {
           st.runnerWrap.innerHTML = '';
-          const e = window.Char.el(myChar(st.ctx), '', { pose: 'run', runPhase: phase });
+          const e = window.Char.el(myChar(st.ctx), '', { pose: 'run', runPhase: st.runPhase });
           const svg = e.querySelector('svg');
-          svg.style.height = '120px';
+          svg.style.height = '118px';
           svg.style.width = 'auto';
           st.runnerWrap.appendChild(e);
         };
-        st.setRunner(0);
-        st.track.appendChild(st.runnerWrap);
-        root.appendChild(st.track);
+        st.setRunner();
         // afstandsbalk
         st.bar = h('div', 'timer-bar');
         st.barFill = h('i');
@@ -1496,15 +1606,31 @@
           e.preventDefault();
           if (st.finished) return;
           st.ctx.send({ type: 'tap', side: side });
-          st.phase = st.phase ? 0 : 1;
-          st.setRunner(st.phase);
-          burst(st.track, { x: 8, y: 92, emojis: ['💨'], count: 1, speed: 1.4, dur: 16, dir: Math.PI });
+          st.cadence = Math.min(9, st.cadence + 1.8); // ren-tempo omhoog
+          burst(st.track, { x: 8 + st.frac * 78, y: 98, emojis: ['💨'], count: 1, speed: 1.6, dur: 16, dir: Math.PI });
         };
         st.bl.addEventListener('pointerdown', tap('l'));
         st.br.addEventListener('pointerdown', tap('r'));
         btns.appendChild(st.bl);
         btns.appendChild(st.br);
         root.appendChild(btns);
+        // continue ren-animatie
+        const loop = () => {
+          const now = Date.now();
+          const dt = Math.min(0.05, (now - st.lastT) / 1000);
+          st.lastT = now;
+          st.cadence *= Math.pow(0.1, dt); // snelle decay zonder tikken
+          if (st.cadence > 0.05 && !st.finished) {
+            st.runPhase = (st.runPhase + st.cadence * dt) % 1;
+            st.scroll = (st.scroll + st.cadence * dt * 80) % 60;
+            st.lanes.style.transform = 'translateX(' + -st.scroll + 'px)';
+            const bob = Math.abs(Math.sin(st.runPhase * Math.PI * 2)) * 4;
+            st.runnerWrap.style.transform = 'translateY(' + -bob + 'px)';
+            st.setRunner();
+          }
+          st.raf = requestAnimationFrame(loop);
+        };
+        st.raf = requestAnimationFrame(loop);
       },
       update(state) {
         if (state.phase === 'countdown') {
@@ -1513,17 +1639,18 @@
         }
         const d = (state.dist && state.dist[st.ctx.me]) || 0;
         const goal = state.goal || 100;
-        const frac = Math.min(1, d / goal);
-        st.runnerWrap.style.left = 6 + frac * 82 + '%';
-        st.barFill.style.width = frac * 100 + '%';
-        st.info.textContent = Math.round(d) + ' / ' + goal + ' meter';
-        if (frac >= 1 && !st.finished) {
+        st.frac = Math.min(1, d / goal);
+        st.runnerWrap.style.left = 6 + st.frac * 80 + '%';
+        st.barFill.style.width = st.frac * 100 + '%';
+        if (!st.finished) st.info.textContent = Math.round(d) + ' / ' + goal + ' m';
+        if (st.frac >= 1 && !st.finished) {
           st.finished = true;
           st.info.textContent = '🏁 Finish!';
-          st.track.style.animation = 'slowmo 0.6s';
         }
       },
-      unmount() {},
+      unmount() {
+        if (st.raf) cancelAnimationFrame(st.raf);
+      },
     };
   })();
 
@@ -1532,7 +1659,7 @@
   // =========================================================
   MG.golf = (function () {
     const st = {};
-    const COURSE = 1700;
+    const COURSE = 1350;
     return {
       mount(root, ctx) {
         st.ctx = ctx;
@@ -1701,25 +1828,31 @@
           if (st.submitted) return;
           st.submitted = true;
           st.moving = false;
-          st.ctx.send({ type: 'submit', value: st.strokes });
+          st.ctx.send({ type: 'submit', value: Math.max(1, st.strokes) });
           st.info.textContent = '🏌️ In de hole in ' + st.strokes + ' slagen!';
           burst(st.canvas.parentNode, { x: 88, y: 60, emojis: ['🎉', '⛳', '✨'], count: 14 });
           Sound.play('win');
         };
+        // Lokaal veiligheidsnet: lever sowieso vóór de deadline in (de server
+        // stuurt geen tussen-broadcasts, dus we kunnen niet op update() wachten).
+        st.autoSubmit = () => {
+          if (st.submitted) return;
+          st.submitted = true;
+          const remain = Math.max(0, st.hole.x - st.ball.x);
+          const val = Math.min(40, Math.max(1, st.strokes + 2 + Math.round(remain / 220)));
+          st.ctx.send({ type: 'submit', value: val });
+          st.info.textContent = 'Tijd op! ' + val + ' slagen';
+        };
+        st.deadlineTimer = setTimeout(st.autoSubmit, 43500);
         st.raf = requestAnimationFrame(phys);
       },
       update(state) {
         st.state = state;
-        // veiligheidsnet: bijna deadline en nog niet ingeleverd -> stuur (met straf).
-        if (!st.submitted && state.deadline && state.deadline - Date.now() < 700) {
-          st.submitted = true;
-          st.ctx.send({ type: 'submit', value: Math.min(40, st.strokes + 15) });
-          st.info.textContent = 'Tijd op! ' + (st.strokes + 15) + ' slagen';
-        }
       },
       unmount() {
         if (st.timer) st.timer.stop();
         if (st.raf) cancelAnimationFrame(st.raf);
+        if (st.deadlineTimer) clearTimeout(st.deadlineTimer);
       },
     };
   })();

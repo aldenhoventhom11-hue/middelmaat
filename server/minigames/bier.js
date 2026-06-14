@@ -3,15 +3,16 @@
 const { waitUntil, countdown } = require('./_realtime');
 
 // Minigame 14 — Het Biertje (vasthouden om te drinken).
-// Houd het glas ingedrukt; hoe langer je vasthoudt, hoe meer slokken. Meeste en
-// minste slokken verliezen; het gemiddelde wint. Vast tijdvenster.
+// Houd het glas ingedrukt; hoe langer je vasthoudt, hoe meer je drinkt. De
+// uitkomst is het PERCENTAGE van het bier dat je opdronk. Het meeste én het
+// minste percentage verliezen; het gemiddelde wint. Vast tijdvenster.
 const WINDOW = 6000;
 
 module.exports = {
   id: 'bier',
   title: 'Het Biertje',
-  theme: 'Hoeveel slokken neem jij?',
-  rules: 'Houd het glas ingedrukt om te drinken. Niet de meeste, niet de minste slokken — het gemiddelde wint!',
+  theme: 'Hoeveel van je bier drink je op?',
+  rules: 'Houd het glas ingedrukt om te drinken. Niet het meeste, niet het minste — het gemiddelde percentage wint!',
   type: 'realtime',
   scoring: 'symmetric',
 
@@ -55,9 +56,9 @@ module.exports = {
     const outcomes = {};
     const reveal = {};
     for (const id of Object.keys(total)) {
-      const sips = Math.max(1, Math.round(total[id] / 320));
+      const pct = Math.min(100, Math.round((total[id] / WINDOW) * 100));
       outcomes[id] = total[id];
-      reveal[id] = { display: sips + ' slok' + (sips === 1 ? '' : 'ken'), sips };
+      reveal[id] = { display: pct + '% opgedronken', pct };
     }
     return { outcomes, reveal };
   },

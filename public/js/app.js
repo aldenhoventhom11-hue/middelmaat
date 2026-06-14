@@ -364,20 +364,38 @@
   // ---- Intro (rad draait, daarna de uitleg-kaart) ----
   let wheelSpunRound = -1;
   let wheelSpinning = false;
+  let lastIntroState = null;
+  let lastIntroHost = false;
   const WHEEL_COLORS = ['#ff6b6b', '#ffd23f', '#4ecdc4', '#5b8cff', '#c77dff', '#ff8fab', '#8ac926', '#ff9f1c'];
+
+  // Toon altijd betrouwbaar de uitleg-kaart (einde van het rad). Idempotent.
+  function showIntroMain() {
+    wheelSpinning = false;
+    $('intro-wheel').classList.add('hidden');
+    $('intro-main').classList.remove('hidden');
+    if (lastIntroState) fillIntro(lastIntroState, lastIntroHost);
+  }
+  // Veiligheidsnet: als je terugkomt in de app terwijl het rad nog 'draait'
+  // (mobiele browsers bevriezen timers/animaties op de achtergrond), maak het
+  // rad dan meteen af zodat niemand vastzit.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && wheelSpinning) showIntroMain();
+  });
 
   function renderIntro(state, isHost) {
     showScreen('intro');
+    lastIntroState = state;
+    lastIntroHost = isHost;
     const g = state.currentGame || {};
     const tb = g.tiebreak;
     const wheel = state.wheel;
 
     // Rad alleen bij een gewone ronde (niet bij tiebreak) en één keer per ronde.
     if (!tb && wheel && wheel.round !== wheelSpunRound) {
-      if (wheelSpinning) return; // niet verstoren tijdens het draaien
       spinWheel(state, isHost);
       return;
     }
+    // Re-render tijdens het draaien: de finisher regelt het einde.
     if (wheelSpinning) return;
     $('intro-wheel').classList.add('hidden');
     $('intro-main').classList.remove('hidden');
@@ -476,18 +494,24 @@
     Sound.play('tick');
     const ticker = setInterval(() => Sound.play('tick'), 350);
 
-    setTimeout(() => {
+    // Idempotente afronding: vuurt op animationend, met fallback-timers als
+    // backup (mobiele throttling). Daarna verschijnt de uitleg-kaart altijd.
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       clearInterval(ticker);
+      clearTimeout(fallback);
+      clearTimeout(hardStop);
+      disc.removeEventListener('animationend', finish);
       const sel = opts[selIndex];
       $('wheel-result').textContent = sel.emoji + ' ' + sel.title + '!';
       Sound.play('reveal');
-      setTimeout(() => {
-        wheelSpinning = false;
-        $('intro-wheel').classList.add('hidden');
-        $('intro-main').classList.remove('hidden');
-        fillIntro(state, isHost);
-      }, 1100);
-    }, 4300);
+      setTimeout(showIntroMain, 800);
+    };
+    disc.addEventListener('animationend', finish, { once: true });
+    const fallback = setTimeout(finish, 4800); // als animationend niet vuurt
+    const hardStop = setTimeout(showIntroMain, 7000); // absolute noodrem
   }
 
   // ---- Spelen ----

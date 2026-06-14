@@ -45,7 +45,8 @@ const scenarios = {
   },
   async ballon(h, n) {
     await h.flush();
-    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: i + 1 });
+    // Ballongrootte 0..1 (sleepbalk, geen getallen meer).
+    for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: Math.min(0.95, 0.1 + i * 0.08) });
     await h.flush();
   },
   async lift(h, n) {
@@ -90,14 +91,13 @@ const scenarios = {
   },
   async haaien(h, n) {
     await h.advance(2400);
-    // Iedereen duwt de volgende; gestaffeld zodat ze op verschillende momenten vallen.
-    for (let r = 0; r < 8; r++) {
-      for (let i = 0; i < n; i++) {
-        h.emit('p' + i, { type: 'push', target: 'p' + ((i + 1) % n) });
-      }
-      await h.advance(400);
+    // Iedereen behalve de laatste rent radiaal naar buiten en valt; gestaffeld.
+    for (let i = 0; i < n - 1; i++) {
+      const a = (i / n) * Math.PI * 2;
+      h.emit('p' + i, { type: 'move', dx: Math.cos(a), dy: Math.sin(a) });
+      await h.advance(450);
     }
-    await h.advance(23000);
+    await h.advance(26000);
   },
   async sprint(h, n) {
     await h.advance(2400);
@@ -108,7 +108,7 @@ const scenarios = {
       }
       await h.advance(120);
     }
-    await h.advance(26000);
+    await h.advance(62000); // voorbij MAX_TIME zodat de race afrondt
   },
   async golf(h, n) {
     await h.flush();

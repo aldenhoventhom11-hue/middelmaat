@@ -6,8 +6,8 @@ const { waitUntil, countdown, secs } = require('./_realtime');
 // Ren 100 meter door afwisselend links/rechts te tikken (ritme = snelheid). De
 // meest gemiddelde tijd wint; de snelste en de langzaamste verliezen.
 const GOAL = 100;
-const MAX_TIME = 25000;
-const BOOST = 9; // snelheidswinst bij een goede (afwisselende) tik
+const MAX_TIME = 60000; // ruim, want de race duurt nu ~4x langer
+const BOOST = 2.3; // lager = je moet langer/meer tikken om te rennen
 const DECAY = 0.9; // momentum-verlies per tick
 
 module.exports = {

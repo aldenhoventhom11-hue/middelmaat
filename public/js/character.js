@@ -244,13 +244,14 @@
       `<rect x="${x - legW / 2}" y="${legTop}" width="${legW}" height="${ankleY - legTop}" rx="${legW / 2}" fill="${legColor}"/>`;
     const shoeEl = (x) =>
       `<ellipse cx="${x + 2}" cy="${feetY - 3}" rx="${legW * 0.72}" ry="6" fill="${bareLegs ? '#d6607a' : shoe}"/>`;
-    const runPhase = opts.runPhase || 0; // 0/1 voor de ren-cyclus
+    const runPhase = opts.runPhase || 0; // continu 0..1 = ren-cyclus
+    const runSwing = Math.sin(runPhase * Math.PI * 2);
     let legs;
     if (pose === 'run') {
-      const sw = 26;
+      const sw = 32;
       const legG = (x, ang) =>
         `<g transform="rotate(${ang} ${x} ${legTop})">${leg(x)}${shoeEl(x)}</g>`;
-      legs = legG(lLegX, runPhase ? sw : -sw) + legG(rLegX, runPhase ? -sw : sw);
+      legs = legG(lLegX, runSwing * sw) + legG(rLegX, -runSwing * sw);
     } else {
       legs = leg(lLegX) + leg(rLegX) + shoeEl(lLegX) + shoeEl(rLegX);
     }
@@ -285,8 +286,8 @@
       handLX = CX - torsoHalf - 6; handLY = hcy - hr - 14;
       handRX = CX + torsoHalf + 6; handRY = hcy - hr - 14;
     } else if (pose === 'run') {
-      handLX = CX - torsoHalf - 11 * bf; handLY = shY + (runPhase ? 4 : 24);
-      handRX = CX + torsoHalf + 11 * bf; handRY = shY + (runPhase ? 24 : 4);
+      handLX = CX - torsoHalf - 11 * bf; handLY = shY + 14 - runSwing * 12;
+      handRX = CX + torsoHalf + 11 * bf; handRY = shY + 14 + runSwing * 12;
     } else {
       handLX = CX - torsoHalf - 7 * bf; handLY = hipY - 4;
       handRX = CX + torsoHalf + 7 * bf; handRY = hipY - 4;

@@ -120,6 +120,14 @@ const scenarios = {
     for (let i = 0; i < n; i++) h.emit('p' + i, { type: 'submit', value: Math.min(0.95, 0.1 + i * 0.08) });
     await h.flush();
   },
+  async hooghouden(h, n) {
+    await h.advance(2400); // voorbij aftelling
+    for (let i = 0; i < n; i++) {
+      await h.advance(250 + i * 80); // gestaffeld laten vallen, binnen 30s
+      h.emit('p' + i, { type: 'drop' });
+    }
+    await h.advance(31000);
+  },
   async verdeelheers(h, n) {
     await h.flush();
     for (let i = 0; i < n; i++) {

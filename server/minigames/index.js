@@ -22,6 +22,7 @@ const modules = [
   require('./sprint'), // 18
   require('./golf'), // 19
   require('./kapper'), // 20
+  require('./hooghouden'), // 21
 ];
 
 // Emoji per minigame (voor het rad en de intro-kaart).
@@ -46,6 +47,7 @@ const EMOJI = {
   sprint: '🏃',
   golf: '⛳',
   kapper: '✂️',
+  hooghouden: '🏓',
 };
 
 const minigames = new Map();

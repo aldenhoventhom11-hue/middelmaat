@@ -1831,6 +1831,163 @@
   })();
 
   // =========================================================
+  // Bal Hooghouden — plateau (volgt je vinger) + stuiterende bal, neon arcade
+  // =========================================================
+  MG.hooghouden = (function () {
+    const st = {};
+    const W = 320,
+      H = 400,
+      PW = 92, // plateau-breedte (middel)
+      PH = 12,
+      BR = 14, // bal-straal (middel)
+      PY = H - 54;
+    return {
+      mount(root, ctx) {
+        st.ctx = ctx;
+        st.started = false;
+        st.dropped = false;
+        st.bounces = 0;
+        st.t0 = 0;
+        st.paddleX = W / 2;
+        st.target = W / 2;
+        st.ball = { x: W / 2, y: PY - BR, vx: 0, vy: 0 };
+        clear(root);
+        root.appendChild(h('div', 'mg-title', '🏓 Bal Hooghouden'));
+        st.info = h('div', 'mg-instruct', 'Beweeg het plateau met je vinger en houd de bal hoog!');
+        root.appendChild(st.info);
+        st.canvas = h('canvas', 'mg-canvas');
+        st.canvas.width = W;
+        st.canvas.height = H;
+        st.canvas.style.cssText = 'width:100%;max-width:' + W + 'px;margin:0 auto;display:block;background:#0a0a1f;border-radius:16px;box-shadow:0 0 0 2px #3b1d6e;touch-action:none;';
+        st.c = st.canvas.getContext('2d');
+        root.appendChild(st.canvas);
+
+        const setTarget = (e) => {
+          const r = st.canvas.getBoundingClientRect();
+          st.target = Math.max(PW / 2, Math.min(W - PW / 2, ((e.clientX - r.left) / r.width) * W));
+        };
+        st.canvas.addEventListener('pointerdown', setTarget);
+        st.canvas.addEventListener('pointermove', setTarget);
+
+        st.draw = () => {
+          const c = st.c;
+          c.clearRect(0, 0, W, H);
+          // neon-grid
+          c.strokeStyle = 'rgba(120,80,220,0.18)';
+          c.lineWidth = 1;
+          for (let x = 0; x <= W; x += 32) {
+            c.beginPath();
+            c.moveTo(x, 0);
+            c.lineTo(x, H);
+            c.stroke();
+          }
+          for (let y = 0; y <= H; y += 32) {
+            c.beginPath();
+            c.moveTo(0, y);
+            c.lineTo(W, y);
+            c.stroke();
+          }
+          // middel-hint op het plateau
+          // plateau (neon)
+          c.fillStyle = 'rgba(0,240,255,0.18)';
+          c.fillRect(st.paddleX - PW / 2 - 3, PY - 3, PW + 6, PH + 6);
+          c.fillStyle = '#00f0ff';
+          c.fillRect(st.paddleX - PW / 2, PY, PW, PH);
+          c.fillStyle = '#0a0a1f';
+          c.fillRect(st.paddleX - 2, PY, 4, PH); // midden-markering
+          // bal (gloed zonder shadowBlur)
+          c.fillStyle = 'rgba(255,80,200,0.3)';
+          c.beginPath();
+          c.arc(st.ball.x, st.ball.y, BR + 7, 0, 7);
+          c.fill();
+          c.fillStyle = '#ff4fd0';
+          c.beginPath();
+          c.arc(st.ball.x, st.ball.y, BR, 0, 7);
+          c.fill();
+          c.fillStyle = 'rgba(255,255,255,0.7)';
+          c.beginPath();
+          c.arc(st.ball.x - 4, st.ball.y - 4, 4, 0, 7);
+          c.fill();
+        };
+
+        const loop = () => {
+          // plateau volgt de vinger (soepel)
+          st.paddleX += (st.target - st.paddleX) * 0.5;
+          if (st.started && !st.dropped) {
+            const elapsed = Date.now() - st.t0;
+            const accel = 1 + Math.min(0.9, elapsed / 30000 * 0.9); // bal versnelt langzaam
+            const G = 0.32 * accel;
+            const b = st.ball;
+            b.vy += G;
+            b.x += b.vx;
+            b.y += b.vy;
+            // wanden
+            if (b.x < BR) {
+              b.x = BR;
+              b.vx = Math.abs(b.vx);
+            } else if (b.x > W - BR) {
+              b.x = W - BR;
+              b.vx = -Math.abs(b.vx);
+            }
+            // plafond (zacht)
+            if (b.y < BR) {
+              b.y = BR;
+              b.vy = Math.abs(b.vy) * 0.6;
+            }
+            // plateau-botsing
+            if (
+              b.vy > 0 &&
+              b.y + BR >= PY &&
+              b.y + BR <= PY + PH + 14 &&
+              b.x >= st.paddleX - PW / 2 &&
+              b.x <= st.paddleX + PW / 2
+            ) {
+              const offset = (b.x - st.paddleX) / (PW / 2); // -1..1
+              b.y = PY - BR;
+              b.vy = -8.4 * accel; // recht omhoog
+              b.vx = offset * 6.2 * accel; // hoek groeit met afstand tot midden
+              st.bounces++;
+              burst(st.canvas.parentNode, { x: (st.paddleX / W) * 100, y: (PY / H) * 100, emojis: ['✨'], count: 3, speed: 1.6, dur: 18 });
+              Sound.play('tick');
+            }
+            // gevallen?
+            if (b.y - BR > H) {
+              st.dropped = true;
+              st.ctx.send({ type: 'drop' });
+              st.info.textContent = '💥 Bal gevallen na ' + st.bounces + ' keer! Wachten op de rest…';
+              burst(st.canvas.parentNode, { x: (b.x / W) * 100, y: 96, emojis: ['💥', '💧'], count: 10, speed: 2.4 });
+              Sound.play('pop');
+            }
+            st.info.textContent = st.dropped
+              ? st.info.textContent
+              : 'Hooggehouden: ' + (elapsed / 1000).toFixed(1) + 's · ' + st.bounces + 'x';
+          } else if (!st.started) {
+            // bal rust op het plateau
+            st.ball.x = st.paddleX;
+            st.ball.y = PY - BR;
+          }
+          st.draw();
+          st.raf = requestAnimationFrame(loop);
+        };
+        st.draw();
+        st.raf = requestAnimationFrame(loop);
+      },
+      update(state) {
+        if (state.phase === 'countdown') {
+          st.info.textContent = 'Klaar… ' + state.count;
+        } else if (state.phase === 'play' && !st.started) {
+          st.started = true;
+          st.t0 = Date.now();
+          st.ball.vy = -2; // klein zetje omhoog bij de start
+        }
+      },
+      unmount() {
+        if (st.raf) cancelAnimationFrame(st.raf);
+      },
+    };
+  })();
+
+  // =========================================================
   // Demo's bij de uitleg: korte loop-animatie die laat zien hoe het werkt.
   // =========================================================
   function loopDemo(box, framesFn, ms) {
@@ -1950,6 +2107,19 @@
       }, 220),
     kapper: (b) =>
       loopDemo(b, (i) => scene(ladySvg(1 - (i % 6) / 8).replace('width="120" height="200"', 'width="74" height="124"') + '<span style="font-size:24px">✂️</span>') + cap('Niet te veel, niet te weinig knippen'), 400),
+    hooghouden: (b) =>
+      loopDemo(b, (i) => {
+        const p = i % 8;
+        const by = p < 4 ? 20 + p * 18 : 20 + (7 - p) * 18; // bal op en neer
+        const px = 30 + (p % 4) * 12;
+        return scene(
+          '<div style="position:relative;width:120px;height:110px">' +
+            '<div style="position:absolute;left:' + px + '%;top:' + by + 'px;font-size:22px">🔴</div>' +
+            '<div style="position:absolute;left:' + px + '%;bottom:8px;transform:translateX(-50%);width:46px;height:8px;border-radius:4px;background:#00f0ff"></div>' +
+            '</div>',
+          '#0a0a1f'
+        ) + cap('Houd de bal hoog — niet te kort, niet te lang');
+      }, 260),
   };
   Object.keys(DEMOS).forEach((k) => {
     if (MG[k]) MG[k].demo = DEMOS[k];
